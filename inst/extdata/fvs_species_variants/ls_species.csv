@@ -1,0 +1,43 @@
+spcd,fvs_code,common_name,scientific_name,wood_type
+12,BF,balsam fir,Abies balsamea,softwood
+68,RC,eastern redcedar,Juniperus virginiana,softwood
+71,TL,tamarack,Larix laricina,softwood
+91,NS,Norway spruce,Picea abies,softwood
+94,WS,white spruce,Picea glauca,softwood
+95,BS,black spruce,Picea mariana,softwood
+97,RS,red spruce,Picea rubens,softwood
+105,JP,jack pine,Pinus banksiana,softwood
+125,RP,red pine,Pinus resinosa,softwood
+129,WP,eastern white pine,Pinus strobus,softwood
+241,WC,northern white-cedar,Thuja occidentalis,softwood
+261,EH,eastern hemlock,Tsuga canadensis,softwood
+313,BE,American beech,Fagus grandifolia,hardwood
+316,RM,red maple,Acer rubrum,hardwood
+317,SV,silver maple,Acer saccharinum,hardwood
+318,SM,sugar maple,Acer saccharum,hardwood
+371,YB,yellow birch,Betula alleghaniensis,hardwood
+372,SB,sweet birch,Betula lenta,hardwood
+375,PB,paper birch,Betula papyrifera,hardwood
+379,GB,gray birch,Betula populifolia,hardwood
+400,HI,hickory spp.,Carya spp.,hardwood
+407,SH,shagbark hickory,Carya ovata,hardwood
+531,AB,American beech,Fagus grandifolia,hardwood
+541,WA,white ash,Fraxinus americana,hardwood
+543,BA,black ash,Fraxinus nigra,hardwood
+544,GA,green ash,Fraxinus pennsylvanica,hardwood
+602,WN,black walnut,Juglans nigra,hardwood
+621,YP,yellow-poplar,Liriodendron tulipifera,hardwood
+693,BG,blackgum,Nyssa sylvatica,hardwood
+701,HH,eastern hophornbeam,Ostrya virginiana,hardwood
+741,BP,balsam poplar,Populus balsamifera,hardwood
+742,EC,eastern cottonwood,Populus deltoides,hardwood
+743,BT,bigtooth aspen,Populus grandidentata,hardwood
+746,QA,quaking aspen,Populus tremuloides,hardwood
+762,BC,black cherry,Prunus serotina,hardwood
+802,WO,white oak,Quercus alba,hardwood
+832,CO,chestnut oak,Quercus montana,hardwood
+833,RO,northern red oak,Quercus rubra,hardwood
+837,BO,bur oak,Quercus macrocarpa,hardwood
+922,BL,black locust,Robinia pseudoacacia,hardwood
+970,OH,other hardwood,hardwood spp.,hardwood
+972,AE,American elm,Ulmus americana,hardwood

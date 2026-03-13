@@ -1,0 +1,77 @@
+spcd,fvs_code,common_name,scientific_name,wood_type
+12,BF,balsam fir,Abies balsamea,softwood
+15,WF,white fir,Abies concolor,softwood
+17,NP,noble fir,Abies procera,softwood
+64,JM,one-seed juniper,Juniperus monosperma,softwood
+68,RC,eastern redcedar,Juniperus virginiana,softwood
+71,TA,tamarack,Larix laricina,softwood
+81,IC,incense cedar,Calocedrus decurrens,softwood
+90,PI,spruce spp.,Picea spp.,softwood
+91,NS,Norway spruce,Picea abies,softwood
+93,RA,red alder,Alnus rubra,hardwood
+94,WS,white spruce,Picea glauca,softwood
+95,BS,black spruce,Picea mariana,softwood
+97,RS,red spruce,Picea rubens,softwood
+105,JP,jack pine,Pinus banksiana,softwood
+108,LP,lodgepole pine,Pinus contorta,softwood
+110,SP,shortleaf pine,Pinus echinata,softwood
+122,PP,ponderosa pine,Pinus ponderosa,softwood
+125,RP,red pine,Pinus resinosa,softwood
+126,PP,pitch pine,Pinus rigida,softwood
+129,WP,eastern white pine,Pinus strobus,softwood
+241,WC,northern white-cedar,Thuja occidentalis,softwood
+261,EH,eastern hemlock,Tsuga canadensis,softwood
+263,WH,western hemlock,Tsuga heterophylla,softwood
+299,CY,Atlantic white-cedar,Chamaecyparis thyoides,softwood
+313,BE,American beech,Fagus grandifolia,hardwood
+315,ST,striped maple,Acer pensylvanicum,hardwood
+316,RM,red maple,Acer rubrum,hardwood
+317,SV,silver maple,Acer saccharinum,hardwood
+318,SM,sugar maple,Acer saccharum,hardwood
+320,NM,Norway maple,Acer platanoides,hardwood
+341,AI,American holly,Ilex opaca,hardwood
+371,YB,yellow birch,Betula alleghaniensis,hardwood
+372,SB,sweet birch,Betula lenta,hardwood
+375,PB,paper birch,Betula papyrifera,hardwood
+379,GB,gray birch,Betula populifolia,hardwood
+391,AH,alternate-leaf dogwood,Cornus alternifolia,hardwood
+400,HI,hickory spp.,Carya spp.,hardwood
+407,SH,shagbark hickory,Carya ovata,hardwood
+521,PS,persimmon,Diospyros virginiana,hardwood
+531,AB,American beech,Fagus grandifolia,hardwood
+541,WA,white ash,Fraxinus americana,hardwood
+543,BA,black ash,Fraxinus nigra,hardwood
+544,GA,green ash,Fraxinus pennsylvanica,hardwood
+601,BN,butternut,Juglans cinerea,hardwood
+602,WN,black walnut,Juglans nigra,hardwood
+611,SG,sweetgum,Liquidambar styraciflua,hardwood
+621,YP,yellow-poplar,Liriodendron tulipifera,hardwood
+652,MG,magnolia spp.,Magnolia spp.,hardwood
+653,CT,cucumbertree,Magnolia acuminata,hardwood
+660,AP,pawpaw,Asimina triloba,hardwood
+693,BG,blackgum,Nyssa sylvatica,hardwood
+694,SA,sassafras,Sassafras albidum,hardwood
+701,HH,eastern hophornbeam,Ostrya virginiana,hardwood
+731,SY,American sycamore,Platanus occidentalis,hardwood
+740,CW,cottonwood spp.,Populus spp.,hardwood
+741,BP,balsam poplar,Populus balsamifera,hardwood
+742,EC,eastern cottonwood,Populus deltoides,hardwood
+743,BT,bigtooth aspen,Populus grandidentata,hardwood
+746,QA,quaking aspen,Populus tremuloides,hardwood
+754,SX,willow spp.,Salix spp.,hardwood
+761,PR,pin cherry,Prunus pensylvanica,hardwood
+762,BC,black cherry,Prunus serotina,hardwood
+763,CC,chokecherry,Prunus virginiana,hardwood
+802,WO,white oak,Quercus alba,hardwood
+823,BR,bear oak,Quercus ilicifolia,hardwood
+832,CO,chestnut oak,Quercus montana,hardwood
+833,RO,northern red oak,Quercus rubra,hardwood
+835,PO,post oak,Quercus stellata,hardwood
+837,BO,bur oak,Quercus macrocarpa,hardwood
+901,BK,bitternut hickory,Carya cordiformis,hardwood
+920,WL,western larch,Larix occidentalis,softwood
+922,BL,black locust,Robinia pseudoacacia,hardwood
+935,MA,mountain-ash,Sorbus americana,hardwood
+951,BW,butternut,Juglans cinerea,hardwood
+970,OH,other hardwood,hardwood spp.,hardwood
+972,AE,American elm,Ulmus americana,hardwood
