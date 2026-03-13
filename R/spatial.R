@@ -269,3 +269,199 @@ map_plots <- function(fia_data, aoi = NULL) {
   }
   result
 }
+
+# ================================================================
+# Spatial API Functions (terrain, climate, soils)
+# ================================================================
+
+#' Get Terrain Data for Plot Locations
+#'
+#' Fetches high-resolution elevation from the USGS 3D Elevation Program
+#' (3DEP) via the Elevation Point Query Service. Supplements FIA's coarse
+#' terrain data with DEM-derived values.
+#'
+#' @param plots_sf An sf POINT object (from [plot_locations()]).
+#' @param source Data source: "USGS" (default, 3DEP point query).
+#'
+#' @return The input sf object with `dem_elevation` (feet) column added.
+#'
+#' @examples
+#' \dontrun{
+#' plots_sf <- plot_locations(fia)
+#' plots_sf <- get_terrain_data(plots_sf)
+#' }
+#'
+#' @seealso [get_climate_data()], [get_soils_data()]
+#' @export
+get_terrain_data <- function(plots_sf, source = "USGS") {
+  if (!inherits(plots_sf, "sf")) {
+    stop("plots_sf must be an sf object. Use plot_locations() first.", call. = FALSE)
+  }
+
+  coords <- sf::st_coordinates(sf::st_transform(plots_sf, 4326))
+  n <- nrow(coords)
+  message("Fetching terrain data for ", n, " locations...")
+
+  elevations <- numeric(n)
+  base_url <- "https://epqs.nationalmap.gov/v1/json"
+
+  for (i in seq_len(n)) {
+    tryCatch({
+      url <- paste0(base_url, "?x=", coords[i, 1], "&y=", coords[i, 2],
+                     "&wkid=4326&units=Feet&includeDate=false")
+      resp <- httr2::request(url) |> httr2::req_timeout(15) |> httr2::req_perform()
+      json <- httr2::resp_body_json(resp)
+      elevations[i] <- as.numeric(json$value)
+    }, error = function(e) {
+      elevations[i] <<- NA_real_
+    })
+  }
+
+  plots_sf$dem_elevation <- elevations
+  message("Terrain data complete. ", sum(!is.na(elevations)), " of ", n, " succeeded.")
+  plots_sf
+}
+
+#' Get Climate Data for Plot Locations
+#'
+#' Fetches annual climate data from Daymet (ORNL) for plot locations.
+#' Returns temperature and precipitation for growth modeling.
+#'
+#' @param plots_sf An sf POINT object.
+#' @param years Integer vector of years. Default 2020.
+#' @param source "daymet" (default).
+#'
+#' @return The sf object with `mean_annual_temp` (F) and `annual_precip` (in).
+#'
+#' @examples
+#' \dontrun{
+#' plots_sf <- get_climate_data(plots_sf, years = 2019)
+#' }
+#'
+#' @seealso [get_terrain_data()], [get_soils_data()]
+#' @export
+get_climate_data <- function(plots_sf, years = 2020, source = "daymet") {
+  if (!inherits(plots_sf, "sf")) {
+    stop("plots_sf must be an sf object.", call. = FALSE)
+  }
+
+  coords <- sf::st_coordinates(sf::st_transform(plots_sf, 4326))
+  n <- nrow(coords)
+  yr <- years[1]
+  message("Fetching climate data for ", n, " locations (year ", yr, ")...")
+
+  plots_sf$mean_annual_temp <- NA_real_
+  plots_sf$annual_precip    <- NA_real_
+
+  for (i in seq_len(n)) {
+    tryCatch({
+      url <- paste0(
+        "https://daymet.ornl.gov/single-pixel/api/data?",
+        "lat=", coords[i, 2], "&lon=", coords[i, 1],
+        "&vars=tmax,tmin,prcp&years=", yr
+      )
+      resp <- httr2::request(url) |>
+        httr2::req_timeout(30) |>
+        httr2::req_perform()
+      body <- httr2::resp_body_string(resp)
+      lines <- strsplit(body, "\n")[[1]]
+      data_lines <- lines[!grepl("^#|^year", lines, ignore.case = TRUE) & nchar(lines) > 0]
+      if (length(data_lines) > 0) {
+        hdr_line <- lines[grepl("^year", lines, ignore.case = TRUE)]
+        full_text <- paste(c(hdr_line, data_lines), collapse = "\n")
+        day_data <- tryCatch(
+          utils::read.csv(textConnection(full_text)),
+          error = function(e) NULL
+        )
+        if (!is.null(day_data) && nrow(day_data) > 0) {
+          tmax_col <- grep("tmax", names(day_data), value = TRUE)[1]
+          tmin_col <- grep("tmin", names(day_data), value = TRUE)[1]
+          prcp_col <- grep("prcp", names(day_data), value = TRUE)[1]
+          if (!is.na(tmax_col) && !is.na(tmin_col)) {
+            mean_temp_c <- mean((day_data[[tmax_col]] + day_data[[tmin_col]]) / 2, na.rm = TRUE)
+            plots_sf$mean_annual_temp[i] <- mean_temp_c * 9/5 + 32
+          }
+          if (!is.na(prcp_col)) {
+            plots_sf$annual_precip[i] <- sum(day_data[[prcp_col]], na.rm = TRUE) / 25.4
+          }
+        }
+      }
+    }, error = function(e) {
+      # Skip failed requests
+    })
+  }
+
+  message("Climate data complete.")
+  plots_sf
+}
+
+#' Get Soils Data for Plot Locations
+#'
+#' Queries SSURGO soil data via the USDA Soil Data Access (SDA) API.
+#' Returns soil properties relevant to forest site productivity.
+#'
+#' @param plots_sf An sf POINT object.
+#'
+#' @return The sf object with soil columns: `drainage_class`, `awc`,
+#'   `soil_depth`, `soil_texture`.
+#'
+#' @examples
+#' \dontrun{
+#' plots_sf <- get_soils_data(plots_sf)
+#' }
+#'
+#' @seealso [get_terrain_data()], [get_climate_data()]
+#' @export
+get_soils_data <- function(plots_sf) {
+  if (!inherits(plots_sf, "sf")) {
+    stop("plots_sf must be an sf object.", call. = FALSE)
+  }
+
+  coords <- sf::st_coordinates(sf::st_transform(plots_sf, 4326))
+  n <- nrow(coords)
+  message("Fetching soils data for ", n, " locations...")
+
+  plots_sf$soil_texture   <- NA_character_
+  plots_sf$drainage_class <- NA_character_
+  plots_sf$awc            <- NA_real_
+  plots_sf$soil_depth     <- NA_real_
+
+  sda_url <- "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest"
+
+  for (i in seq_len(n)) {
+    tryCatch({
+      lon <- coords[i, 1]
+      lat <- coords[i, 2]
+
+      sql <- paste0(
+        "SELECT TOP 1 co.drainagecl, ch.texdesc, ch.awc_r, ch.hzdepb_r ",
+        "FROM mapunit AS mu ",
+        "INNER JOIN component AS co ON mu.mukey = co.mukey ",
+        "INNER JOIN chorizon AS ch ON co.cokey = ch.cokey ",
+        "WHERE mu.mukey IN (",
+        "SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('",
+        "POINT(", lon, " ", lat, ")')",
+        ") ORDER BY co.comppct_r DESC, ch.hzdept_r ASC"
+      )
+
+      resp <- httr2::request(sda_url) |>
+        httr2::req_body_json(list(query = sql, format = "JSON")) |>
+        httr2::req_timeout(30) |>
+        httr2::req_perform()
+
+      result <- httr2::resp_body_json(resp)
+      if (!is.null(result$Table) && length(result$Table) > 0) {
+        row <- result$Table[[1]]
+        plots_sf$soil_texture[i]   <- as.character(row$texdesc %||% NA)
+        plots_sf$drainage_class[i] <- as.character(row$drainagecl %||% NA)
+        plots_sf$awc[i]            <- as.numeric(row$awc_r %||% NA)
+        plots_sf$soil_depth[i]     <- as.numeric(row$hzdepb_r %||% NA)
+      }
+    }, error = function(e) {
+      # Skip failed queries
+    })
+  }
+
+  message("Soils data complete.")
+  plots_sf
+}
