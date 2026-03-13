@@ -1390,3 +1390,786 @@ regen_comm <- summarize_regen(
   commercial_species = c("WP", "RO", "SM", "WO")
 )
 ```
+
+# Species Code System {#sec-species}
+
+FIA uses numeric species codes (SPCD), while FVS uses 2-letter alpha codes that
+vary by regional variant. FIAwrapper handles all translations automatically, but
+you can also use the species functions directly.
+
+**References**:
+
+- [FIA REF_SPECIES table](https://apps.fs.usda.gov/fia/datamart/CSV/REF_SPECIES.csv)
+  — Complete FIA species list
+- [FVS Species Codes by Variant](https://www.fs.usda.gov/fvs/software/plantnat.php)
+  — Official FVS species mappings
+
+## Species Code Functions
+
+### `fia_to_fvs()` — FIA Numeric → FVS Alpha
+
+```{r}
+fia_to_fvs(c(316, 833, 129, 261, 12))
+#> [1] "RM" "RO" "WP" "EH" "BF"
+
+# Unknown species get "OH" (other hardwood)
+fia_to_fvs(99999)
+#> [1] "OH"
+```
+
+### `fvs_to_fia()` — FVS Alpha → FIA Numeric
+
+```{r}
+fvs_to_fia(c("RM", "RO", "WP", "EH", "BF"))
+#> [1] 316 833 129 261  12
+
+# Unknown codes get 999
+fvs_to_fia("ZZ")
+#> [1] 999
+```
+
+### `get_common_name()` — FIA Code → Common Name
+
+```{r}
+get_common_name(c(316, 833, 129, 261, 12))
+#> [1] "red maple"          "red oak"            "eastern white pine"
+#> [4] "eastern hemlock"    "balsam fir"
+```
+
+### `get_species_table()` — Full Mapping Table
+
+```{r}
+spp_table <- get_species_table("NE")
+head(spp_table)
+#>   spcd fvs_code       common_name        scientific_name wood_type
+#> 1   12       BF       balsam fir        Abies balsamea  softwood
+#> 2   68       RC  eastern redcedar  Juniperus virginiana  softwood
+#> ...
+```
+
+The table includes `spcd`, `fvs_code`, `common_name`, `scientific_name`, and
+`wood_type` ("hardwood" or "softwood") for all species in the variant.
+
+### `pef_to_fvs()` — Penobscot Experimental Forest Codes
+
+```{r}
+# For users working with PEF data
+pef_to_fvs(c(1, 2, 3, 4))
+#> [1] "BF" "RS" "WS" "RS"
+```
+
+## Variant-Aware Lookups
+
+Species codes are **variant-aware**: the same SPCD may map to different FVS
+codes depending on the regional variant. FIAwrapper loads the correct mapping
+table from `inst/extdata/fvs_species_variants/` based on the active variant.
+
+```{r}
+# NE variant
+set_fvs_variant("NE")
+fia_to_fvs(316)  # red maple
+#> [1] "RM"
+
+# SN variant
+set_fvs_variant("SN")
+fia_to_fvs(316)  # same species, might have different code
+#> [1] "RM"
+```
+
+Currently bundled variant tables: **NE** (75 species), **SN** (61 species),
+**LS** (42 species). Additional variants fall back to the default table.
+
+# Utility Functions {#sec-utilities}
+
+## Basal Area Computation
+
+```{r}
+# Basal area in square feet (from DBH in inches)
+ba_ft2(10)
+#> [1] 0.5454154
+
+# Formula: DBH^2 × 0.005454154 = DBH^2 × (π/4) / 144
+ba_ft2(c(8, 12, 16, 20))
+#> [1] 0.3491 0.7854 1.3963 2.1817
+
+# Metric: basal area in square meters (from DBH in cm)
+ba_m2(25.4)
+#> [1] 0.05067
+```
+
+## Quadratic Mean Diameter
+
+```{r}
+qmd(
+  dbh = c(8, 10, 12, 14, 16),
+  tpa = c(20, 15, 12, 8, 5)
+)
+#> [1] 11.15
+```
+
+$QMD = \sqrt{\frac{\sum DBH_i^2 \times TPA_i}{\sum TPA_i}}$
+
+## TPA Expansion Factors
+
+```{r}
+# Compute TPA from first principles
+compute_tpa(
+  dbh = c(12, 8, 3.5, 14),
+  subplot = c(1, 2, 3, 4),
+  cond_prop = c(1.0, 1.0, 1.0, 0.8)  # last tree in split condition
+)
+#> [1]  6.018  6.018 74.965  7.523
+```
+
+**Parameters**:
+
+- `dbh`: DBH in inches (determines subplot vs microplot)
+- `subplot`: Subplot number (used to count unique subplots)
+- `cond_prop`: Condition proportion (optional, adjusts TPA)
+- `subplot_radius_ft`: Default 24.0 ft
+- `microplot_radius_ft`: Default 6.8 ft
+- `dbh_threshold`: Default 5.0 inches
+
+## Column Name Translation
+
+FIAwrapper provides bidirectional column name translation between FIA database
+names and forestry terms.
+
+### `fia_to_forestry_names()`
+
+```{r}
+df <- data.frame(DIA = 10.5, HT = 65, STATUSCD = 1, SPCD = 316)
+fia_to_forestry_names(df)
+#>    dbh height status_code spcd
+#> 1 10.5     65           1  316
+```
+
+### `forestry_to_fia_names()`
+
+```{r}
+df <- data.frame(dbh = 10.5, height = 65, status_code = 1)
+forestry_to_fia_names(df)
+#>    DIA  HT STATUSCD
+#> 1 10.5  65        1
+```
+
+**Full translation mapping** — see @sec-column-ref.
+
+## Unit Conversions (Internal Helpers)
+
+These are available but primarily used internally:
+
+```{r}
+inches_to_cm(10)    # 25.4
+cm_to_inches(25.4)  # 10
+feet_to_meters(65)  # 19.812
+meters_to_feet(20)  # 65.617
+acres_to_hectares(1)    # 0.4047
+hectares_to_acres(0.5)  # 1.2355
+```
+
+# Spatial API Functions {#sec-spatial-apis}
+
+FIAwrapper can enrich plot data with terrain, climate, and soils information
+from federal web APIs. These functions require an `sf` POINT object (from
+`plot_locations()`) and network access.
+
+## Terrain Data (USGS 3DEP) {#sec-terrain}
+
+`get_terrain_data()` fetches high-resolution elevation from the
+[USGS 3D Elevation Program](https://www.usgs.gov/3d-elevation-program) (3DEP)
+National Map API.
+
+```{r}
+plots_sf <- plot_locations(fia_ri)
+plots_terrain <- get_terrain_data(plots_sf)
+
+head(plots_terrain[, c("plot_cn", "dem_elevation")])
+```
+
+**Returns**: The input `sf` object with an added `dem_elevation` column (feet).
+This is DEM-derived elevation at ~10m resolution, more precise than FIA's
+recorded `ELEV` value.
+
+**API reference**: [USGS EPQS](https://epqs.nationalmap.gov/v1/docs)
+
+## Climate Data (Daymet) {#sec-climate}
+
+`get_climate_data()` fetches annual climate summaries from
+[Daymet](https://daymet.ornl.gov/), a 1-km gridded climate dataset produced by
+Oak Ridge National Laboratory.
+
+```{r}
+plots_climate <- get_climate_data(plots_sf, years = 2019)
+
+head(plots_climate[, c("plot_cn", "mean_annual_temp", "annual_precip")])
+```
+
+**Returns**: Added columns `mean_annual_temp` (°F) and `annual_precip` (inches).
+
+**Parameters**:
+
+- `years`: Integer year(s) to fetch (default: 2020)
+- `source`: Currently `"daymet"` only
+
+**API reference**: [Daymet Single Pixel](https://daymet.ornl.gov/web_services)
+
+**Climate variables available from Daymet** (FIAwrapper retrieves temp and
+precip; additional variables available via direct API access):
+
+| Variable | Description |
+|----------|-------------|
+| tmax, tmin | Daily max/min temperature (°C) |
+| prcp | Daily precipitation (mm) |
+| srad | Shortwave radiation (W/m²) |
+| vp | Vapor pressure (Pa) |
+| swe | Snow water equivalent (kg/m²) |
+| dayl | Day length (seconds) |
+
+## Soils Data (SSURGO) {#sec-soils}
+
+`get_soils_data()` queries the
+[USDA SSURGO database](https://www.nrcs.usda.gov/resources/data-and-reports/soil-survey-geographic-database-ssurgo)
+via the Soil Data Access (SDA) web API.
+
+```{r}
+plots_soils <- get_soils_data(plots_sf)
+
+head(plots_soils[, c("plot_cn", "soil_texture", "drainage_class", "awc", "soil_depth")])
+```
+
+**Returns**: Added columns:
+
+| Column | Description |
+|--------|-------------|
+| `soil_texture` | Soil texture class (e.g., "sandy loam", "silt loam") |
+| `drainage_class` | Drainage class (e.g., "well drained", "poorly drained") |
+| `awc` | Available water capacity (inches/inch) |
+| `soil_depth` | Depth to restrictive layer (inches) |
+
+**API reference**: [SDA Query](https://sdmdataaccess.nrcs.usda.gov/)
+
+::: {.callout-tip}
+## Combining Spatial Data for Modeling
+```{r}
+# Build a complete modeling dataset
+plots_sf <- plot_locations(fia_ri)
+plots_sf <- get_terrain_data(plots_sf)
+plots_sf <- get_climate_data(plots_sf, years = 2019)
+plots_sf <- get_soils_data(plots_sf)
+
+# Join to tree data for individual tree models
+trees <- build_tree_list(fia_ri, variant = "NE")
+# merge on plot_cn...
+```
+:::
+
+# End-to-End Workflows {#sec-workflows}
+
+## Workflow 1: Property Inventory → FVS {#sec-workflow-property}
+
+A consulting forester receives a shapefile of a client's property and needs to
+produce FVS-ready stand inventories.
+
+```{r}
+library(FIAwrapper)
+set_fvs_variant("NE")
+data(fia_ri)  # substitute with real state data
+
+# ---- Step 1: Build tree list ----
+# In practice: get_tree_list(states = "ME", aoi = "client.shp")
+trees <- build_tree_list(fia_ri, include_dead = TRUE, variant = "NE")
+cat("Trees:", nrow(trees), "on", length(unique(trees$plot_id)), "plots\n")
+
+# ---- Step 2: Quality check ----
+flagged <- flag_outliers(trees)
+issues <- flagged[!is.na(flagged$outlier_reason), ]
+cat(nrow(issues), "trees flagged for review\n")
+
+# Review flagged trees
+if (nrow(issues) > 0) {
+  print(issues[, c("plot_id", "spp_code", "dbh", "height", "outlier_reason")])
+}
+
+# ---- Step 3: Plot summaries ----
+plots <- get_plot_summary(trees[trees$status == "live", ])
+cat("\nPlot Summary Statistics:\n")
+cat("  Mean TPA:", round(mean(plots$tpa), 1), "trees/acre\n")
+cat("  Mean BA/ac:", round(mean(plots$ba_per_acre), 1), "ft²/acre\n")
+cat("  Mean QMD:", round(mean(plots$qmd, na.rm = TRUE), 1), "inches\n")
+
+# ---- Step 4: Species composition ----
+spp <- get_species_summary(trees[trees$status == "live", ])
+top_spp <- spp |>
+  dplyr::group_by(spp_code, species_name) |>
+  dplyr::summarize(mean_ba = round(mean(ba_per_acre), 1), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(mean_ba))
+cat("\nTop Species by BA/acre:\n")
+print(head(top_spp, 8))
+
+# ---- Step 5: Site data ----
+site <- get_site_data(fia_ri)
+
+# ---- Step 6: Export to FVS ----
+export_fvs_treelist(
+  trees[trees$status == "live", ],
+  "client_fvs.tre",
+  variant = "NE",
+  format = "standard"
+)
+
+stand_data <- merge(plots, site, by = "plot_cn")
+export_fvs_standlist(stand_data, "client_stands.csv", variant = "NE")
+
+cat("\nFVS files exported. Ready for growth projection.\n")
+```
+
+## Workflow 2: Regional Growth Analysis {#sec-workflow-growth}
+
+A researcher wants to build diameter increment models from FIA remeasurement
+data across a state.
+
+```{r}
+library(FIAwrapper)
+set_fvs_variant("NE")
+data(fia_ri)  # substitute: fetch_fia_data("ME", data_dir = "~/fia")
+
+# ---- Step 1: Identify remeasured plots ----
+remeas <- get_remeasured_plots(fia_ri)
+cat(nrow(remeas), "plots with multiple measurements\n")
+cat("Year range:", min(remeas$first_year), "-", max(remeas$last_year), "\n")
+
+# ---- Step 2: Build time series ----
+ts <- build_time_series(fia_ri, include_dead = TRUE, variant = "NE")
+cat(nrow(ts), "tree-measurement records\n")
+
+# ---- Step 3: Plot-level growth summary ----
+growth <- summarize_growth(ts)
+cat("\nPlot-Level Growth Summary:\n")
+cat("  Mean net BA growth:", round(mean(growth$net_ba_growth_per_acre, na.rm = TRUE), 2),
+    "ft²/ac/yr\n")
+cat("  Mean mortality rate:", round(mean(growth$mortality_rate, na.rm = TRUE) * 100, 1),
+    "%\n")
+
+# ---- Step 4: Individual tree panel data ----
+panel <- get_individual_tree_history(ts, min_measurements = 2)
+
+# Filter to quality growth records
+model_data <- panel |>
+  dplyr::filter(
+    status == "live",
+    !ingrowth,
+    !is.na(annual_dbh_growth),
+    annual_dbh_growth > 0,
+    annual_dbh_growth < 1.0
+  )
+cat(nrow(model_data), "growth records for modeling\n")
+
+# ---- Step 5: Fit diameter increment model ----
+mod <- lm(
+  log(annual_dbh_growth) ~ log(dbh) + bal + spp_code,
+  data = model_data
+)
+
+cat("\nDiameter Increment Model:\n")
+cat("  R² =", round(summary(mod)$r.squared, 3), "\n")
+cat("  n  =", nrow(model_data), "\n")
+
+# ---- Step 6: Summarize growth by species ----
+growth_by_spp <- model_data |>
+  dplyr::group_by(spp_code) |>
+  dplyr::summarize(
+    n_trees = dplyr::n(),
+    mean_dbh = round(mean(dbh), 1),
+    mean_growth = round(mean(annual_dbh_growth), 3),
+    sd_growth = round(sd(annual_dbh_growth), 3),
+    .groups = "drop"
+  ) |>
+  dplyr::arrange(dplyr::desc(n_trees))
+
+cat("\nGrowth by Species:\n")
+print(growth_by_spp)
+```
+
+## Workflow 3: Species Composition Change Over Time {#sec-workflow-species}
+
+Tracking how species composition shifts between inventory cycles.
+
+```{r}
+library(FIAwrapper)
+set_fvs_variant("NE")
+data(fia_ri)
+
+# ---- Step 1: Build time series (live trees only) ----
+ts <- build_time_series(fia_ri, include_dead = FALSE, variant = "NE")
+
+# ---- Step 2: Species BA by measurement period ----
+spp_time <- ts |>
+  dplyr::group_by(inventory_year, spp_code) |>
+  dplyr::summarize(
+    total_ba = sum(ba_per_acre, na.rm = TRUE),
+    total_tpa = sum(tpa, na.rm = TRUE),
+    n_plots = dplyr::n_distinct(plot_id),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(
+    mean_ba_per_acre = total_ba / n_plots,
+    mean_tpa = total_tpa / n_plots
+  )
+
+# ---- Step 3: Compare hardwood vs softwood ----
+spp_table <- get_species_table("NE")
+spp_time <- dplyr::left_join(
+  spp_time,
+  spp_table[, c("fvs_code", "wood_type")],
+  by = c("spp_code" = "fvs_code")
+)
+
+wood_trend <- spp_time |>
+  dplyr::group_by(inventory_year, wood_type) |>
+  dplyr::summarize(
+    ba_per_acre = sum(mean_ba_per_acre, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+cat("Hardwood vs Softwood BA/acre by Year:\n")
+print(wood_trend)
+
+# ---- Step 4: Top species trends ----
+top_spp_codes <- spp_time |>
+  dplyr::group_by(spp_code) |>
+  dplyr::summarize(total = sum(mean_ba_per_acre)) |>
+  dplyr::arrange(dplyr::desc(total)) |>
+  head(5) |>
+  dplyr::pull(spp_code)
+
+spp_trend <- spp_time |>
+  dplyr::filter(spp_code %in% top_spp_codes) |>
+  dplyr::select(inventory_year, spp_code, mean_ba_per_acre)
+
+cat("\nTop 5 Species BA/acre Trends:\n")
+print(tidyr::pivot_wider(spp_trend, names_from = inventory_year,
+                          values_from = mean_ba_per_acre))
+```
+
+## Workflow 4: Site Quality Assessment {#sec-workflow-site}
+
+Evaluating site quality across plots using FIA attributes and spatial API data.
+
+```{r}
+library(FIAwrapper)
+set_fvs_variant("NE")
+data(fia_ri)
+
+# ---- Step 1: Build tree list and summaries ----
+trees <- build_tree_list(fia_ri, variant = "NE")
+plots <- get_plot_summary(trees)
+site  <- get_site_data(fia_ri)
+
+# ---- Step 2: Combine into site assessment table ----
+assessment <- merge(plots, site, by = "plot_cn", suffixes = c("", "_site"))
+
+# Key site quality indicators
+cat("Site Quality Assessment:\n")
+cat("  Site Index range:", min(assessment$site_index, na.rm = TRUE),
+    "-", max(assessment$site_index, na.rm = TRUE), "ft\n")
+cat("  Stand Age range:", min(assessment$stand_age, na.rm = TRUE),
+    "-", max(assessment$stand_age, na.rm = TRUE), "years\n")
+cat("  BA/acre range:", round(min(assessment$ba_per_acre), 1),
+    "-", round(max(assessment$ba_per_acre), 1), "ft²/ac\n")
+
+# ---- Step 3: Enrich with spatial data (requires network) ----
+# plots_sf <- plot_locations(fia_ri)
+# plots_sf <- get_terrain_data(plots_sf)
+# plots_sf <- get_climate_data(plots_sf, years = 2019)
+# plots_sf <- get_soils_data(plots_sf)
+
+# ---- Step 4: Site index vs BA relationship ----
+cat("\nSite Index vs BA/acre correlation:",
+    round(cor(assessment$site_index, assessment$ba_per_acre,
+              use = "complete.obs"), 3), "\n")
+
+# ---- Step 5: Variance estimate for the area ----
+est <- estimate_variance(
+  stand = rep(1, nrow(assessment)),
+  plot = assessment$plot_id,
+  y = assessment$ba_per_acre,
+  conf_level = 0.90
+)
+cat("\nBA/acre estimate:\n")
+cat("  Mean:", round(est$mean, 1), "ft²/ac\n")
+cat("  SE:", round(est$se, 1), "ft²/ac\n")
+cat("  90% CI:", round(est$ci_lower, 1), "-", round(est$ci_upper, 1), "ft²/ac\n")
+cat("  Precision:", round(est$precision_pct, 1), "% of mean\n")
+```
+
+# Appendices {.unnumbered}
+
+## Appendix A: Complete Column Name Reference {#sec-column-ref}
+
+The `fia_to_forestry_names()` and `forestry_to_fia_names()` functions use
+this mapping:
+
+### Tree Table Columns
+
+| FIA Column | FIAwrapper Name | Description |
+|-----------|----------------|-------------|
+| CN | tree_cn | Unique tree control number |
+| PLT_CN | plot_cn | Plot control number |
+| CONDID | condition_id | Condition ID within plot |
+| SUBP | subplot | Subplot number (1–4) |
+| TREE | tree_num | Tree number within subplot |
+| STATUSCD | status_code | 1=live, 2=dead, 3=removed |
+| SPCD | spcd | FIA numeric species code |
+| DIA | dbh | Diameter at breast height (inches) |
+| HT | height | Total tree height (feet) |
+| ACTUALHT | actual_height | Actual measured height (feet) |
+| CR | crown_ratio | Compacted crown ratio (%) |
+| CCLCD | crown_class | Crown class code |
+| TPA_UNADJ | tpa_unadj | FIA unadjusted TPA |
+| VOLCFNET | vol_cf_net | Net cubic foot volume |
+| VOLCFGRS | vol_cf_gross | Gross cubic foot volume |
+| VOLBFNET | vol_bf_net | Net board foot volume (Scribner) |
+| DRYBIO_AG | biomass_ag_dry | Aboveground dry biomass (lbs) |
+| CARBON_AG | carbon_ag | Aboveground carbon (lbs) |
+| PREV_TRE_CN | prev_tree_cn | CN at previous measurement |
+| DECAYCD | decay_class | Decay class (dead trees, 1–5) |
+| DSTRBCD1 | disturbance_code1 | Primary disturbance code |
+| DAMAGE_AGENT_CD1 | damage_code1 | Primary damage agent code |
+
+### Plot Table Columns
+
+| FIA Column | FIAwrapper Name | Description |
+|-----------|----------------|-------------|
+| CN | plot_cn | Unique plot control number |
+| STATECD | state_code | FIPS state code |
+| COUNTYCD | county_code | FIPS county code |
+| PLOT | plot_number | Plot number within county |
+| INVYR | inventory_year | Inventory year |
+| LAT | lat | Latitude (fuzzed, WGS84) |
+| LON | lon | Longitude (fuzzed, WGS84) |
+| ELEV | elevation | Elevation (feet) |
+| ECOSUBCD | ecological_subsection | Ecological subsection code |
+
+### Condition Table Columns
+
+| FIA Column | FIAwrapper Name | Description |
+|-----------|----------------|-------------|
+| CONDPROP_UNADJ | cond_proportion | Proportion of plot in condition (0–1) |
+| FORTYPCD | forest_type_code | FIA forest type code |
+| STDAGE | stand_age | Stand age (years) |
+| SICOND | site_index | Site index (base age 50, feet) |
+| SITECLCD | site_class | Site productivity class (1–7) |
+| SLOPE | slope | Slope (percent) |
+| ASPECT | aspect | Aspect (degrees) |
+| BALIVE | ba_live | Live BA on condition (ft²/ac) |
+| SDI | stand_density_index | Stand density index |
+| OWNGRPCD | ownership_group | Ownership group code |
+| PHYSCLCD | physiographic_class | Physiographic class code |
+| DSTRBCD1 | disturbance_code1 | Primary disturbance code |
+
+## Appendix B: FIA Forest Type Codes {#sec-forest-types}
+
+Common forest type codes found in the COND table `FORTYPCD` field. Full list:
+[REF_FOREST_TYPE](https://apps.fs.usda.gov/fia/datamart/CSV/REF_FOREST_TYPE.csv).
+
+| Code | Forest Type | Region |
+|------|------------|--------|
+| 101 | Jack pine | Lake States, NE |
+| 102 | Red spruce/balsam fir | NE |
+| 103 | Eastern white pine/eastern hemlock | NE |
+| 104 | White pine | NE, Mid-Atlantic |
+| 105 | Red pine | NE, Lake States |
+| 108 | Norway spruce | NE |
+| 301 | Scotch pine | Various |
+| 401 | Sugar maple/beech/yellow birch | NE |
+| 402 | Black cherry | NE, Mid-Atlantic |
+| 403 | White oak/red oak/hickory | Eastern US |
+| 501 | White oak | Eastern US |
+| 503 | Northern red oak | NE, Mid-Atlantic |
+| 505 | Scarlet oak | SE, Mid-Atlantic |
+| 509 | Red maple/oak | NE |
+| 511 | Red maple/lowland | NE |
+| 520 | Mixed hardwoods | Various |
+| 701 | Eastern white pine | NE |
+| 801 | White spruce | NE, Lake States |
+| 802 | Black spruce | NE, Lake States |
+| 805 | Balsam fir | NE |
+| 901 | Atlantic white-cedar | NE coast |
+
+## Appendix C: FIA Status Codes and Damage Agents {#sec-status-codes}
+
+### Tree Status (STATUSCD)
+
+| Code | Status | Description |
+|------|--------|-------------|
+| 1 | Live | Tree is alive |
+| 2 | Dead | Standing dead tree (snag) |
+| 3 | Removed | Tree was removed (harvested, cleared) |
+
+### Site Productivity Class (SITECLCD)
+
+| Code | Board Feet/Acre/Year | Description |
+|------|---------------------|-------------|
+| 1 | 225+ | Very high productivity |
+| 2 | 165–224 | High productivity |
+| 3 | 120–164 | Moderate-high productivity |
+| 4 | 85–119 | Moderate productivity |
+| 5 | 50–84 | Low-moderate productivity |
+| 6 | 20–49 | Low productivity |
+| 7 | 0–19 | Very low productivity |
+
+### Crown Class (CCLCD)
+
+| Code | Crown Class | Description |
+|------|------------|-------------|
+| 1 | Open-grown | Free from competition |
+| 2 | Dominant | Crown extends above general canopy |
+| 3 | Codominant | Crown in general canopy level |
+| 4 | Intermediate | Crown below but extending into canopy |
+| 5 | Overtopped | Crown entirely below canopy |
+
+## Appendix D: Function Quick Reference {#sec-function-ref}
+
+### Data Acquisition
+
+| Function | Purpose |
+|----------|---------|
+| `fetch_fia_data(states, tables, data_dir, method)` | Download FIA data |
+| `load_fia_data(data_dir, states)` | Load cached FIA data |
+
+### Spatial
+
+| Function | Purpose |
+|----------|---------|
+| `get_plots_in_area(aoi, fia_data, buffer_ft)` | Filter plots to AOI |
+| `plot_locations(fia_data, crs)` | Create sf POINT from plots |
+| `map_plots(fia_data, aoi)` | Quick interactive map |
+| `get_terrain_data(plots_sf)` | USGS 3DEP elevation |
+| `get_climate_data(plots_sf, years)` | Daymet climate data |
+| `get_soils_data(plots_sf)` | SSURGO soil data |
+
+### Tree Lists
+
+| Function | Purpose |
+|----------|---------|
+| `build_tree_list(fia_data, include_dead, variant)` | Build clean tree list |
+| `get_tree_list(states, aoi, include_dead, variant)` | One-line download + build |
+| `prep_fia_data(fia_trees, fia_plots, fia_cond)` | Low-level data prep |
+
+### Summaries
+
+| Function | Purpose |
+|----------|---------|
+| `get_plot_summary(tree_list, include_dead)` | Per-plot aggregation |
+| `get_site_data(fia_data)` | Site attributes from PLOT + COND |
+| `get_species_summary(tree_list)` | Per-species-per-plot summary |
+| `summarize_plot(stand, plot, dbh, height, tpa)` | Vector-based plot summary |
+
+### Time Series
+
+| Function | Purpose |
+|----------|---------|
+| `get_remeasured_plots(fia_data)` | Find multi-cycle plots |
+| `build_time_series(fia_data, include_dead, variant)` | Link trees across cycles |
+| `summarize_growth(time_series)` | Plot-level growth metrics |
+| `get_individual_tree_history(time_series)` | Panel data for modeling |
+| `compute_competition(tree_list)` | BAL, relative DBH, plot BA |
+
+### FVS Export
+
+| Function | Purpose |
+|----------|---------|
+| `set_fvs_variant(variant)` | Set session FVS variant |
+| `export_fvs_treelist(tree_list, file, variant, format)` | Write FVS tree file |
+| `export_fvs_standlist(plot_summary, file, variant)` | Write FVS stand file |
+
+### Species Codes
+
+| Function | Purpose |
+|----------|---------|
+| `fia_to_fvs(spcd, variant)` | FIA numeric → FVS alpha |
+| `fvs_to_fia(fvs_code, variant)` | FVS alpha → FIA numeric |
+| `get_common_name(spcd)` | FIA code → common name |
+| `get_species_table(variant)` | Full mapping table |
+| `pef_to_fvs(pef_code)` | PEF code → FVS alpha |
+
+### Quality Control
+
+| Function | Purpose |
+|----------|---------|
+| `flag_outliers(data, method, sensitivity)` | Detect outlier trees |
+| `estimate_variance(stand, plot, y, stratum)` | SE and confidence intervals |
+| `summarize_regen(stand, plot, subplot, dbh)` | Regeneration metrics |
+
+### Utilities
+
+| Function | Purpose |
+|----------|---------|
+| `ba_ft2(dbh_inches)` | Basal area (ft²) |
+| `ba_m2(dbh_cm)` | Basal area (m²) |
+| `qmd(dbh, tpa)` | Quadratic mean diameter |
+| `compute_tpa(dbh, subplot, cond_prop)` | Per-tree expansion factor |
+| `fia_to_forestry_names(df)` | FIA → forestry column names |
+| `forestry_to_fia_names(df)` | Forestry → FIA column names |
+| `check_python_deps()` | Verify Python environment |
+| `ensure_python_env()` | Create/update Python environment |
+
+## Appendix E: External Resources {#sec-resources}
+
+### FIA Program
+
+- [FIA National Program](https://www.fia.fs.usda.gov/) — Official website
+- [FIADB User Guide v9.2](https://www.fia.fs.usda.gov/library/database-documentation/)
+  — Complete database documentation (essential reference)
+- [FIA DataMart](https://apps.fs.usda.gov/fia/datamart/) — Download raw FIA data
+- [EVALIDator](https://apps.fs.usda.gov/fiadb-api/evalidator) — Web-based
+  estimation tool (use to verify FIAwrapper outputs)
+- [FIA Spatial Data](https://www.fia.fs.usda.gov/tools-data/spatial/index.php)
+  — Spatial data request portal
+
+### FVS (Forest Vegetation Simulator)
+
+- [FVS Overview](https://www.fs.usda.gov/fvs/whatis.shtml) — What is FVS
+- [FVS Variants](https://www.fs.usda.gov/fvs/software/plantnat.php) — Regional
+  models and species coverage
+- [Suppose User Guide](https://www.fs.usda.gov/fvs/documents/userguides.shtml)
+  — GUI for running FVS
+- [FVS Species Codes](https://www.fs.usda.gov/fvs/documents/gtrs.shtml) — Alpha
+  codes by variant
+
+### R Packages for Forestry
+
+- [rFIA](https://cran.r-project.org/package=rFIA) — R interface to FIA data
+  (Hunter Stanke). Used by FIAwrapper for data downloads.
+- [ForestTools](https://cran.r-project.org/package=ForestTools) — Remote sensing
+  for forestry
+- [lmfor](https://cran.r-project.org/package=lmfor) — Forest biometrics models
+
+### Federal APIs Used by FIAwrapper
+
+- [USGS 3DEP / EPQS](https://www.usgs.gov/3d-elevation-program) — Elevation
+  data (10m resolution)
+- [Daymet](https://daymet.ornl.gov/) — Gridded daily climate (1km resolution,
+  ORNL DAAC)
+- [SSURGO / SDA](https://www.nrcs.usda.gov/resources/data-and-reports/soil-survey-geographic-database-ssurgo)
+  — Soil survey data (USDA NRCS)
+
+### Key Literature
+
+- Bechtold & Patterson (2005). *The Enhanced FIA Program — National Consistency
+  with Regional Relevance*. Gen. Tech. Rep. SRS-80.
+- Burrill et al. (2024). *The Forest Inventory and Analysis Database: Database
+  Description and User Guide for Phase 2*. Version 9.2.
+- Dixon (2002). *Essential FVS: A User's Guide to the Forest Vegetation
+  Simulator*. USDA-FS Internal Report.
+- Wykoff (1990). *A Basal Area Increment Model for Individual Conifers in the
+  Northern Rocky Mountains*. Forest Science 36(4):1077-1104.
+- Monserud & Sterba (1999). *Modeling Individual Tree Mortality for Austrian
+  Forest Species*. Forest Ecology and Management 113:109-123.
+- Scott et al. (2005). *Sample-Based Estimators Used by the Forest Inventory
+  and Analysis National Information Management System*. GTR-SRS-80, Chapter 4.
+- Shaw (2008). *Evaluation and Use of FIA Data for Growth and Yield
+  Applications*. GTR-NRS-P-56.
+- Reineke (1933). *Perfecting a Stand-Density Index for Even-Aged Forests*.
+  Journal of Agricultural Research 46:627-638.
