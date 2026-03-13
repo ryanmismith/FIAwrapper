@@ -32,8 +32,8 @@ species_pool <- data.frame(
   common = c("balsam fir", "eastern redcedar", "Atlantic white-cedar",
              "red spruce", "eastern white pine", "northern white-cedar",
              "eastern hemlock", "red maple", "sugar maple",
-             "white oak", "northern red oak", "sweetgum",
-             "white ash", "red oak", "American elm"),
+             "American beech", "white ash", "sweetgum",
+             "white oak", "northern red oak", "American elm"),
   # Approximate range of DBH (inches) and HT (feet) in RI
   dbh_mean = c(8, 7, 6, 9, 14, 6, 12, 10, 11, 14, 13, 10, 11, 12, 10),
   dbh_sd   = c(4, 3, 3, 4, 7, 3, 6, 5, 5, 6, 6, 5, 5, 6, 5),
@@ -282,8 +282,12 @@ for (i in 1:12) {
         trees$VOLBFNET[j] <- if (trees$DIA[j] >= 9.0) round(trees$VOLCFNET[j] * 5.5, 0) else 0
         trees$DRYBIO_AG[j] <- round(trees$VOLCFGRS[j] * 28, 0)
         trees$CARBON_AG[j] <- round(trees$DRYBIO_AG[j] * 0.5, 0)
-        # Update TPA
-        if (trees$DIA[j] >= 5.0) trees$TPA_UNADJ[j] <- 6.018046
+        # Update TPA based on final DBH
+        if (trees$DIA[j] >= 5.0) {
+          trees$TPA_UNADJ[j] <- 6.018046
+        } else {
+          trees$TPA_UNADJ[j] <- 74.965282
+        }
       }
     }
   }
