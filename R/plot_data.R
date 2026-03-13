@@ -46,8 +46,6 @@ get_plot_summary <- function(tree_list, include_dead = FALSE) {
     dplyr::summarize(
       inventory_year  = if ("inventory_year" %in% names(tree_list))
                           dplyr::first(.data$inventory_year) else NA_integer_,
-      tpa             = sum(.data$tpa, na.rm = TRUE),
-      ba_per_acre     = sum(.data$ba_per_acre, na.rm = TRUE),
       qmd             = qmd(.data$dbh, .data$tpa),
       mean_dbh        = stats::weighted.mean(.data$dbh, .data$tpa, na.rm = TRUE),
       top_height      = .compute_top_height(.data$height, .data$tpa, .data$dbh),
@@ -63,6 +61,8 @@ get_plot_summary <- function(tree_list, include_dead = FALSE) {
                           sum(.data$vol_cf_net * .data$tpa, na.rm = TRUE)
                         else NA_real_,
       n_trees         = dplyr::n(),
+      tpa             = sum(.data$tpa, na.rm = TRUE),
+      ba_per_acre     = sum(.data$ba_per_acre, na.rm = TRUE),
       .groups = "drop"
     )
 
@@ -209,11 +209,11 @@ get_species_summary <- function(tree_list) {
     dplyr::group_by(dplyr::across(dplyr::all_of(c(grp_col, spp_col)))) |>
     dplyr::summarize(
       species_name = if ("species" %in% names(tree_list)) dplyr::first(.data$species) else NA_character_,
-      tpa          = sum(.data$tpa, na.rm = TRUE),
-      ba_per_acre  = sum(.data$ba_per_acre, na.rm = TRUE),
       qmd          = qmd(.data$dbh, .data$tpa),
       mean_dbh     = stats::weighted.mean(.data$dbh, .data$tpa, na.rm = TRUE),
       n_trees      = dplyr::n(),
+      tpa          = sum(.data$tpa, na.rm = TRUE),
+      ba_per_acre  = sum(.data$ba_per_acre, na.rm = TRUE),
       .groups      = "drop"
     ) |>
     dplyr::left_join(plot_totals, by = grp_col) |>

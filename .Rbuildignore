@@ -6,6 +6,3 @@
 ^docs$
 ^pkgdown$
 ^\.lintr$
-^FIA_.*\.R$
-^FIA_.*\.r$
-^flag_outliers\.R$
