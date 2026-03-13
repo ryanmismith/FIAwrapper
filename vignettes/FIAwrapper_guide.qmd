@@ -350,3 +350,501 @@ get_common_name(sort(unique(fia_ri$TREE$SPCD)))
 ```
 
 This dataset is used in every example throughout this guide.
+
+# Data Acquisition {#sec-data-acquisition}
+
+FIAwrapper provides two functions for getting FIA data onto your machine:
+`fetch_fia_data()` for downloading, and `load_fia_data()` for loading
+previously downloaded data.
+
+## Downloading FIA Data
+
+`fetch_fia_data()` downloads FIA tables for one or more states. It tries the
+[rFIA](https://cran.r-project.org/package=rFIA) package first (if installed),
+then falls back to direct CSV downloads from the
+[FIA DataMart](https://apps.fs.usda.gov/fia/datamart/).
+
+```{r}
+# Download core tables for Maine and New Hampshire
+fia <- fetch_fia_data(
+  states = c("ME", "NH"),
+  tables = c("TREE", "PLOT", "COND", "SUBPLOT"),
+  data_dir = "~/fia_data",
+  method = "auto"  # tries rFIA first, then DataMart
+)
+
+names(fia)
+#> [1] "TREE" "PLOT" "COND" "SUBPLOT"
+```
+
+**Parameters**:
+
+- `states`: Character vector of 2-letter state abbreviations (e.g., `c("ME", "NH", "VT")`)
+- `tables`: Which FIA tables to download. Default: `c("TREE", "PLOT", "COND", "SUBPLOT")`
+- `data_dir`: Directory to cache downloads. Default: `getOption("FIAwrapper.data_dir")` or `tempdir()`
+- `method`: `"auto"` (default), `"rfia"`, or `"datamart"`
+
+**Caching**: Downloaded files are cached locally. Files less than 30 days old are
+reused automatically. Delete the cache directory to force a fresh download.
+
+::: {.callout-tip}
+## rFIA vs DataMart
+The `rFIA` method is faster and more reliable for multi-state downloads. Install
+it with `install.packages("rFIA")`. The DataMart fallback downloads individual
+CSV files from [apps.fs.usda.gov/fia/datamart/CSV/](https://apps.fs.usda.gov/fia/datamart/CSV/).
+:::
+
+## Loading Cached Data
+
+```{r}
+# Load previously downloaded data
+fia <- load_fia_data("~/fia_data", states = "ME")
+```
+
+`load_fia_data()` auto-detects whether data was saved in rFIA format (RDS files)
+or as raw CSVs. Optionally filter by state when loading multi-state datasets.
+
+## Using the Example Dataset
+
+For this guide, we use the bundled `fia_ri` dataset:
+
+```{r}
+data(fia_ri)
+# This is equivalent to what fetch_fia_data() returns:
+# a named list with TREE, PLOT, and COND data frames
+```
+
+# Spatial Queries {#sec-spatial}
+
+FIAwrapper can filter FIA plots to a specific area of interest (AOI) using
+shapefiles, `sf` objects, or bounding boxes.
+
+## Filtering Plots by Area
+
+`get_plots_in_area()` is the core spatial function. It finds all FIA plots
+within your AOI and returns a filtered copy of the FIA data.
+
+```{r}
+# From a shapefile
+fia_local <- get_plots_in_area(
+  aoi = "my_property.shp",
+  fia_data = fia,
+  buffer_ft = 5280  # 1-mile buffer around the AOI
+)
+
+# From an sf object
+library(sf)
+my_bbox <- st_as_sf(st_as_sfc(st_bbox(
+  c(xmin = -71.6, ymin = 41.4, xmax = -71.3, ymax = 41.9),
+  crs = 4326
+)))
+fia_local <- get_plots_in_area(aoi = my_bbox, fia_data = fia_ri)
+
+# From a bounding box vector (xmin, ymin, xmax, ymax)
+fia_local <- get_plots_in_area(
+  aoi = c(-71.6, 41.4, -71.3, 41.9),
+  fia_data = fia_ri
+)
+```
+
+**Parameters**:
+
+- `aoi`: File path (shapefile, GeoPackage, GeoJSON), `sf` object, or numeric
+  vector `c(xmin, ymin, xmax, ymax)` in WGS84
+- `fia_data`: FIA data list (from `fetch_fia_data()`) or character vector of
+  state abbreviations (auto-downloads)
+- `buffer_ft`: Buffer distance in feet around the AOI (default: 0)
+- `data_dir`: Cache directory when `fia_data` is state abbreviations
+
+**Returns**: A filtered FIA data list (same structure as input) containing only
+plots within the AOI. All tables (TREE, PLOT, COND) are filtered consistently.
+
+::: {.callout-note}
+## Spatial Engine
+`get_plots_in_area()` uses the R `sf` package when available. If `sf` is not
+installed, it falls back to Python geopandas via `reticulate`. Install `sf`
+with `install.packages("sf")` for the simplest setup.
+:::
+
+## Extracting Plot Coordinates
+
+`plot_locations()` creates an `sf` POINT dataset from FIA plot coordinates.
+
+```{r}
+plots_sf <- plot_locations(fia_ri)
+class(plots_sf)
+#> [1] "sf"         "data.frame"
+
+head(plots_sf[, c("plot_cn", "inventory_year")])
+```
+
+**Returns**: An `sf` data frame with POINT geometry in the specified CRS
+(default: EPSG:4326 / WGS84). Includes all PLOT table columns.
+
+## Mapping Plots
+
+`map_plots()` creates a quick interactive or static map.
+
+```{r}
+# Basic map
+map_plots(fia_ri)
+
+# With AOI overlay
+map_plots(fia_ri, aoi = "my_property.shp")
+```
+
+Uses `leaflet` for interactive maps (if installed), otherwise falls back to
+base R `plot()`. The AOI boundary is overlaid when provided.
+
+# Building Tree Lists {#sec-tree-lists}
+
+## `build_tree_list()` — The Core Function {#sec-build-tree-list}
+
+This is the main workhorse function. It transforms raw FIA tables into a clean,
+analysis-ready tree list.
+
+```{r}
+set_fvs_variant("NE")
+
+trees <- build_tree_list(
+  fia_data = fia_ri,
+  include_dead = FALSE,
+  variant = "NE",
+  most_recent = TRUE,
+  compute_expansion = TRUE
+)
+
+nrow(trees)
+#> [1] 452
+
+head(trees[, c("plot_id", "spp_code", "species", "dbh", "height", "tpa", "ba_per_acre")])
+```
+
+**Parameters**:
+
+- `fia_data`: Named list with TREE, PLOT, and COND data frames
+- `include_dead`: Include standing dead trees? Default `FALSE`. When `TRUE`,
+  adds a `status` column ("live" / "dead")
+- `variant`: FVS variant code for species translation. Default: session variant
+- `most_recent`: Keep only the latest inventory cycle? Default `TRUE`
+- `compute_expansion`: Compute TPA from subplot geometry? Default `TRUE`.
+  When `FALSE`, uses FIA's `TPA_UNADJ` directly
+
+### Output Columns {#sec-tree-list-columns}
+
+The output tibble contains one row per tree with these columns:
+
+**Tree identity and location**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `plot_id` | character | Unique plot ID: `STATECD_COUNTYCD_PLOT` |
+| `plot_cn` | integer | FIA plot control number |
+| `subplot` | integer | Subplot number (1–4) |
+| `tree_num` | integer | Tree number within subplot |
+| `tree_cn` | integer | Unique tree control number |
+| `inventory_year` | integer | Year of measurement |
+
+**Species**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `species` | character | Common name (e.g., "red maple") |
+| `spp_code` | character | FVS alpha code (e.g., "RM") |
+| `spcd` | integer | FIA numeric code (e.g., 316), kept for reference |
+
+**Measurements** (imperial units):
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `dbh` | numeric | Diameter at breast height (inches) |
+| `height` | numeric | Total height (feet) |
+| `crown_ratio` | numeric | Crown ratio (percent, 0–100) |
+| `crown_class` | integer | Crown class (1=open-grown, 2=dominant, 3=codominant, 4=intermediate, 5=overtopped) |
+
+**Per-acre values**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `tpa` | numeric | Trees per acre this tree represents |
+| `ba_tree` | numeric | Individual tree basal area (ft²) |
+| `ba_per_acre` | numeric | BA contribution = `ba_tree × tpa` (ft²/acre) |
+
+**Status**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `status` | character | "live" or "dead" |
+| `status_code` | integer | FIA STATUSCD (1, 2, or 3) |
+| `decay_class` | integer | Decay class for dead trees (1–5) |
+| `damage_code1` | integer | Primary damage agent code |
+
+**Volume and biomass**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `vol_cf_net` | numeric | Net cubic foot volume |
+| `vol_cf_gross` | numeric | Gross cubic foot volume |
+| `vol_bf_net` | numeric | Net board foot volume (Scribner) |
+| `biomass_ag_dry` | numeric | Aboveground dry biomass (lbs) |
+| `carbon_ag` | numeric | Aboveground carbon (lbs) |
+
+**Site and location**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `state_code` | integer | FIPS state code |
+| `county_code` | integer | FIPS county code |
+| `lat` / `lon` | numeric | Fuzzed coordinates |
+| `elevation` | numeric | Elevation (feet) |
+| `slope` | numeric | Slope (percent) |
+| `aspect` | numeric | Aspect (degrees) |
+| `site_index` | numeric | Site index (base age 50, feet) |
+| `site_class` | integer | Site productivity class |
+| `stand_age` | integer | Stand age (years) |
+| `forest_type_code` | integer | FIA forest type code |
+
+### How TPA Is Computed {#sec-tpa-computation}
+
+`build_tree_list()` computes TPA using the FIA nested plot design:
+
+1. Trees with **DBH ≥ 5.0 inches** are measured on the **subplot** (24 ft
+   radius). Each subplot covers `π × 24² / 43560 = 0.04154 acres`. With 4
+   subplots, each tree represents `1 / (0.04154 × 4) ≈ 6.018 trees/acre`.
+
+2. Trees with **DBH < 5.0 inches** are measured on the **microplot** (6.8 ft
+   radius). Each microplot covers `π × 6.8² / 43560 = 0.003336 acres`. With
+   4 microplots, each tree represents `1 / (0.003336 × 4) ≈ 74.965 trees/acre`.
+
+3. If `CONDPROP_UNADJ` < 1.0 (plot straddles conditions), TPA is adjusted:
+   `TPA = TPA_base / CONDPROP_UNADJ`.
+
+::: {.callout-important}
+## TPA vs TPA_UNADJ
+FIA provides `TPA_UNADJ` in the TREE table, which is their own expansion
+factor. FIAwrapper's `compute_tpa()` recalculates this from first principles
+using the subplot geometry. In most cases the values agree closely. Set
+`compute_expansion = FALSE` to use FIA's values instead.
+:::
+
+### Working with Dead Trees
+
+```{r}
+all_trees <- build_tree_list(fia_ri, include_dead = TRUE)
+
+# Status breakdown
+table(all_trees$status)
+#>  dead  live
+#>    15   452
+
+# Dead tree attributes
+snags <- all_trees[all_trees$status == "dead", ]
+head(snags[, c("spp_code", "dbh", "height", "decay_class", "tpa")])
+```
+
+Dead trees (STATUSCD = 2) are standing dead / snags. They have valid DBH and
+height measurements, plus a `decay_class` (1 = recently dead, 5 = heavily
+decomposed). Mortality analysis requires `include_dead = TRUE`.
+
+## `get_tree_list()` — One-Line Convenience
+
+`get_tree_list()` chains `fetch_fia_data()` → `get_plots_in_area()` →
+`build_tree_list()` into a single call.
+
+```{r}
+# Download + clip + build in one step
+trees <- get_tree_list(
+  states = "ME",
+  aoi = "my_property.shp",
+  data_dir = "~/fia_data",
+  include_dead = TRUE,
+  variant = "NE",
+  most_recent = TRUE
+)
+```
+
+**Parameters**: Combines all parameters from the three underlying functions.
+Provide `states` and/or `aoi` to control data scope.
+
+## Low-Level Data Prep: `prep_fia_data()`
+
+For more control over the table joining process, use `prep_fia_data()` directly.
+This function joins TREE, PLOT, and COND tables and renames columns, but does
+**not** compute TPA or filter by status.
+
+```{r}
+prepped <- prep_fia_data(
+  fia_trees = fia_ri$TREE,
+  fia_plots = fia_ri$PLOT,
+  fia_cond = fia_ri$COND,
+  include_dead = TRUE,
+  variant = "NE"
+)
+
+# All FIA columns renamed to forestry terms
+names(prepped)
+```
+
+Useful when you want to apply custom filtering or compute expansion factors
+differently (e.g., for non-standard plot designs).
+
+# Plot & Site Data {#sec-plot-site}
+
+## Plot Summaries {#sec-plot-summary}
+
+`get_plot_summary()` aggregates a tree list to one row per plot with standard
+forestry metrics.
+
+```{r}
+trees <- build_tree_list(fia_ri, variant = "NE")
+plots <- get_plot_summary(trees)
+
+head(plots[, c("plot_id", "tpa", "ba_per_acre", "qmd", "top_height",
+               "species_count", "dominant_species")])
+```
+
+**Output columns**:
+
+| Column | Units | Description |
+|--------|-------|-------------|
+| `tpa` | trees/acre | Total trees per acre |
+| `ba_per_acre` | ft²/acre | Total basal area per acre |
+| `qmd` | inches | Quadratic mean diameter |
+| `mean_dbh` | inches | TPA-weighted mean DBH |
+| `top_height` | feet | Mean height of tallest 40 TPA trees (site height proxy) |
+| `mean_height` | feet | TPA-weighted mean height |
+| `species_count` | count | Number of species on plot |
+| `dominant_species` | character | Species with highest BA |
+| `vol_per_acre` | ft³/acre | Net cubic foot volume (if available) |
+| `n_trees` | count | Number of measured trees |
+
+**Dead tree handling**: By default, `get_plot_summary()` excludes dead trees.
+Set `include_dead = TRUE` to include them in all calculations.
+
+```{r}
+# Compare live-only vs all-stems summaries
+plots_live <- get_plot_summary(all_trees, include_dead = FALSE)
+plots_all  <- get_plot_summary(all_trees, include_dead = TRUE)
+
+# Dead trees add to TPA and BA
+mean(plots_all$tpa - plots_live$tpa)
+```
+
+::: {.callout-tip}
+## QMD Computation
+QMD (quadratic mean diameter) is computed as:
+$$QMD = \sqrt{\frac{\sum_{i=1}^{n} DBH_i^2 \times TPA_i}{\sum_{i=1}^{n} TPA_i}}$$
+This is the diameter of the tree with average basal area, and is always
+larger than the arithmetic mean diameter. It's the standard metric used in
+silvicultural prescriptions and yield tables.
+:::
+
+## Site Attributes {#sec-site-data}
+
+`get_site_data()` extracts plot-level site and stand characteristics from the
+PLOT and COND tables.
+
+```{r}
+site <- get_site_data(fia_ri)
+
+head(site[, c("plot_cn", "inventory_year", "elevation", "slope", "aspect",
+              "stand_age", "site_index", "forest_type_code")])
+```
+
+**Output columns**:
+
+| Column | Units | Description |
+|--------|-------|-------------|
+| `elevation` | feet | Elevation above sea level |
+| `slope` | percent | Slope gradient |
+| `aspect` | degrees | Aspect (0 = north, 90 = east, 180 = south, 270 = west) |
+| `forest_type_code` | integer | FIA forest type (see [REF_FOREST_TYPE](https://apps.fs.usda.gov/fia/datamart/CSV/REF_FOREST_TYPE.csv)) |
+| `stand_age` | years | Stand age |
+| `site_index` | feet | Site index at base age 50 (height of dominant trees) |
+| `site_class` | integer | Site productivity class (1=highest, 7=lowest) |
+| `ownership_group` | integer | Ownership code ([ref](https://www.fia.fs.usda.gov/library/database-documentation/)) |
+| `stand_density_index` | index | Reineke's stand density index |
+| `ba_live` | ft²/acre | Live basal area on condition |
+
+**Merging with plot summaries**:
+
+```{r}
+# Combine metrics with site data
+full_plots <- merge(plots, site, by = "plot_cn", suffixes = c("", "_site"))
+
+# Now you have BA/acre + site index + slope + etc. in one table
+head(full_plots[, c("plot_id", "ba_per_acre", "qmd", "site_index", "slope", "stand_age")])
+```
+
+## Species Composition {#sec-species-summary}
+
+`get_species_summary()` creates per-species summaries for each plot.
+
+```{r}
+spp <- get_species_summary(trees)
+
+head(spp[, c("plot_id", "spp_code", "species_name", "tpa", "ba_per_acre", "qmd", "pct_ba")])
+```
+
+**Output columns**:
+
+| Column | Description |
+|--------|-------------|
+| `spp_code` | FVS alpha species code |
+| `species_name` | Common name |
+| `tpa` | Trees per acre for this species |
+| `ba_per_acre` | Basal area (ft²/acre) for this species |
+| `qmd` | QMD for this species (inches) |
+| `mean_dbh` | Weighted mean DBH (inches) |
+| `pct_ba` | Percent of total plot BA from this species |
+| `n_trees` | Number of measured trees |
+
+**Finding dominant species across all plots**:
+
+```{r}
+# Top species by mean BA/acre across all plots
+spp |>
+  dplyr::group_by(spp_code, species_name) |>
+  dplyr::summarize(
+    mean_ba = mean(ba_per_acre, na.rm = TRUE),
+    plots_present = dplyr::n(),
+    .groups = "drop"
+  ) |>
+  dplyr::arrange(dplyr::desc(mean_ba)) |>
+  head(10)
+```
+
+### Relationship Between Summary Functions
+
+```
+build_tree_list()         # Tree-level data (1 row per tree)
+    │
+    ├── get_plot_summary()    # Plot-level (1 row per plot)
+    │       Aggregates: TPA, BA/ac, QMD, species count
+    │
+    ├── get_species_summary() # Species×Plot level
+    │       Aggregates: TPA, BA/ac, QMD per species per plot
+    │
+    └── get_site_data()       # Plot-level site attributes
+            Source: PLOT + COND tables directly
+```
+
+## `summarize_plot()` — Vector-Based Alternative
+
+For users who prefer working with raw vectors (not tibbles), `summarize_plot()`
+accepts stand, plot, DBH, height, and TPA as separate vectors.
+
+```{r}
+result <- summarize_plot(
+  stand   = trees$plot_id,
+  plot    = trees$plot_cn,
+  dbh     = trees$dbh,
+  height  = trees$height,
+  tpa     = trees$tpa,
+  species = trees$spp_code
+)
+head(result)
+```
+
+This function also supports custom aggregation columns via `sum_cols` and
+`mean_cols` parameters.
