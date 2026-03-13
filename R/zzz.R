@@ -1,3 +1,6 @@
+#' @importFrom rlang %||%
+NULL
+
 # Package-level environment for storing state
 .pkg_env <- new.env(parent = emptyenv())
 
