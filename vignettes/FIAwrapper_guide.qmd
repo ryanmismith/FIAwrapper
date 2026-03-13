@@ -848,3 +848,545 @@ head(result)
 
 This function also supports custom aggregation columns via `sum_cols` and
 `mean_cols` parameters.
+
+# FVS Export {#sec-fvs}
+
+The [Forest Vegetation Simulator](https://www.fs.usda.gov/fvs/whatis.shtml)
+(FVS) is the USDA Forest Service's standard growth and yield projection system.
+FIAwrapper exports tree lists and stand initialization data in formats that FVS
+can read directly.
+
+**Key FVS references**:
+
+- [FVS Overview](https://www.fs.usda.gov/fvs/whatis.shtml) — What FVS does
+- [FVS Variants](https://www.fs.usda.gov/fvs/software/plantnat.php) — Regional
+  model variants and species coverage
+- [Suppose User Guide](https://www.fs.usda.gov/fvs/documents/userguides.shtml)
+  — GUI for running FVS
+- Dixon (2002). *Essential FVS: A User's Guide to the Forest Vegetation
+  Simulator*. USDA-FS Internal Report.
+
+## Setting the FVS Variant
+
+```{r}
+set_fvs_variant("NE")
+#> FVS variant set to: NE
+
+# The variant stays active for the session
+getOption("FIAwrapper.variant")
+#> [1] "NE"
+```
+
+The variant determines:
+
+- Which 2-letter species codes are used (e.g., SPCD 316 = "RM" in NE, "RM" in SN)
+- Which species mapping table is loaded from `inst/extdata/fvs_species_variants/`
+- The `variant` field in stand initialization records
+
+## Exporting Tree Lists {#sec-fvs-treelist}
+
+`export_fvs_treelist()` writes a tree list in one of three FVS-compatible
+formats.
+
+```{r}
+trees <- build_tree_list(fia_ri, variant = "NE")
+
+# Fixed-width FVS format (.tre) — standard FVS input
+export_fvs_treelist(trees, "fvs_input.tre", variant = "NE", format = "standard")
+
+# CSV format — for Suppose or custom import
+export_fvs_treelist(trees, "fvs_input.csv", variant = "NE", format = "csv")
+
+# Suppose-compatible format
+export_fvs_treelist(trees, "fvs_suppose.csv", variant = "NE", format = "suppose")
+```
+
+**Parameters**:
+
+- `tree_list`: Tibble from `build_tree_list()` or similar
+- `file`: Output file path
+- `variant`: FVS variant code. Uses session variant if `NULL`
+- `format`: `"standard"` (fixed-width .tre), `"csv"`, or `"suppose"`
+- `stand_id_col`: Column for FVS stand ID (default: `"plot_id"`)
+
+### FVS Standard Fixed-Width Format
+
+The `"standard"` format writes the fixed-width tree record format documented in
+the [FVS User Guide](https://www.fs.usda.gov/fvs/documents/userguides.shtml):
+
+| Columns | Field | Source |
+|---------|-------|--------|
+| 1–4 | Stand ID | `plot_id` (truncated to 4 chars) |
+| 5–7 | Tree ID | `tree_num` |
+| 8–10 | Tree count (TPA) | `tpa` |
+| 11–13 | History code | 1 = live, 6 = recent dead |
+| 14–16 | Species code | FVS alpha code |
+| 17–20 | DBH | Inches, 0.1 precision |
+| 24–26 | Height | Feet, integer |
+| 30–32 | Crown ratio code | Tenths (1–9) |
+
+### CSV Format
+
+The CSV format includes named columns: `stand_id`, `tree_id`, `species`, `dbh`,
+`height`, `crown_ratio`, `tpa`, `status`.
+
+### Suppose Format
+
+The `"suppose"` format matches the column structure expected by the
+[Suppose](https://www.fs.usda.gov/fvs/software/suppose.php) GUI: `StandID`,
+`TreeID`, `TreeCount`, `History`, `Species`, `DBH`, `DG`, `Ht`, `HtTopK`,
+`CrRatio`, damage codes, `TreeValue`, and `Prescription`.
+
+## Exporting Stand Initialization {#sec-fvs-standlist}
+
+`export_fvs_standlist()` writes stand-level data for FVS initialization.
+
+```{r}
+plots <- get_plot_summary(trees)
+site  <- get_site_data(fia_ri)
+stand_data <- merge(plots, site, by = "plot_cn")
+
+export_fvs_standlist(stand_data, "stands.csv", variant = "NE")
+```
+
+**Output columns**: `stand_id`, `variant`, `latitude`, `longitude`, `elevation`,
+`slope`, `aspect`, `site_index`, `ba_per_acre`, `tpa`.
+
+::: {.callout-tip}
+## FVS Workflow
+A typical FVS workflow:
+
+1. `build_tree_list()` → clean tree data
+2. `get_plot_summary()` + `get_site_data()` → stand attributes
+3. `export_fvs_treelist()` → `.tre` or `.csv` file
+4. `export_fvs_standlist()` → stand initialization file
+5. Load both files into FVS/Suppose and run projections
+:::
+
+# Time Series & Remeasurement {#sec-time-series}
+
+FIA plots are remeasured on rotating cycles (typically 5–10 years). FIAwrapper
+provides functions to identify remeasured plots, link trees across measurements,
+and compute growth increments.
+
+**Key concepts**:
+
+- **PREV_PLT_CN**: Links the current plot measurement to the previous one
+- **PREV_TRE_CN**: Links an individual tree record to its previous measurement
+- **Ingrowth**: Trees that cross the 5.0-inch DBH threshold between measurements
+- **Mortality**: Trees that transition from live (STATUSCD = 1) to dead (STATUSCD = 2)
+- **Survivors**: Trees that remain live across both measurements
+
+**References**:
+
+- Shaw (2008). *Evaluation and Use of FIA Data for Growth and Yield
+  Applications*. GTR-NRS-P-56.
+- Westfall et al. (2023). *A National Assessment of Growth and Mortality from
+  FIA Data*. Forest Science 69(3).
+
+## Finding Remeasured Plots
+
+`get_remeasured_plots()` identifies plots measured in multiple inventory cycles.
+
+```{r}
+remeas <- get_remeasured_plots(fia_ri)
+remeas
+#>   plot_cn state_code county_code n_measurements first_year last_year years
+#> 1   10001         44           7              2       2014      2019 2014, 2019
+#> 2   10002         44           7              2       2014      2019 2014, 2019
+#> ...
+```
+
+**Returns**: Tibble with one row per unique plot location (identified by
+`STATECD_COUNTYCD_PLOT`), showing measurement count and year range.
+
+The function links plots across cycles using `PREV_PLT_CN` when available, or
+falls back to matching on `STATECD` + `COUNTYCD` + `PLOT`.
+
+## Building Time Series {#sec-build-time-series}
+
+`build_time_series()` creates tree lists for ALL measurement cycles and links
+individual trees across measurements.
+
+```{r}
+ts <- build_time_series(
+  fia_ri,
+  include_dead = TRUE,
+  variant = "NE",
+  min_measurements = 2
+)
+
+nrow(ts)
+#> [1] 320
+
+names(ts)
+```
+
+**Additional columns** beyond `build_tree_list()`:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `plot_key` | character | Stable plot ID across measurements |
+| `measurement_number` | integer | 1 = earliest, 2 = next, etc. |
+| `years_since_previous` | numeric | Years between this and prior measurement |
+| `prev_dbh` | numeric | DBH at previous measurement (inches) |
+| `prev_height` | numeric | Height at previous measurement (feet) |
+| `dbh_growth` | numeric | Periodic DBH increment (inches) |
+| `height_growth` | numeric | Periodic height increment (feet) |
+| `annual_dbh_growth` | numeric | Annualized DBH increment (inches/year) |
+| `annual_height_growth` | numeric | Annualized height increment (feet/year) |
+| `ingrowth` | logical | `TRUE` if tree was not present in prior measurement |
+| `mortality` | logical | `TRUE` if tree died between measurements |
+
+### How Trees Are Linked
+
+1. **Primary**: Match via `PREV_TRE_CN` → `CN` (FIA's official tree link)
+2. **Fallback**: Match on `plot_key` + `subplot` + `tree_num` when
+   `PREV_TRE_CN` is not available
+
+### Interpreting Growth Data
+
+```{r}
+# Survivor trees with valid growth
+survivors <- ts |>
+  dplyr::filter(
+    measurement_number > 1,
+    !ingrowth,
+    !mortality,
+    !is.na(dbh_growth)
+  )
+
+# Mean annual DBH increment
+mean(survivors$annual_dbh_growth, na.rm = TRUE)
+
+# Distribution by species
+survivors |>
+  dplyr::group_by(spp_code) |>
+  dplyr::summarize(
+    n = dplyr::n(),
+    mean_ann_growth = mean(annual_dbh_growth, na.rm = TRUE),
+    median_ann_growth = median(annual_dbh_growth, na.rm = TRUE)
+  ) |>
+  dplyr::arrange(dplyr::desc(n))
+```
+
+## Growth Summaries {#sec-growth-summary}
+
+`summarize_growth()` aggregates time series data to plot-level growth metrics.
+
+```{r}
+growth <- summarize_growth(ts)
+growth
+```
+
+**Output columns**:
+
+| Column | Units | Description |
+|--------|-------|-------------|
+| `plot_key` | — | Stable plot identifier |
+| `period_start` | year | Start of growth period |
+| `period_end` | year | End of growth period |
+| `period_years` | years | Length of period |
+| `ba_per_acre_start` | ft²/ac | BA at start |
+| `ba_per_acre_end` | ft²/ac | BA at end |
+| `net_ba_growth_per_acre` | ft²/ac/yr | Net BA change per year |
+| `gross_ba_growth_per_acre` | ft²/ac/yr | Gross BA growth (survivors + ingrowth) |
+| `mortality_ba_per_acre` | ft²/ac/yr | BA lost to mortality per year |
+| `ingrowth_tpa` | trees/ac/yr | New trees crossing threshold per year |
+| `mean_dbh_growth` | in/yr | Mean annual DBH increment |
+| `mortality_rate` | proportion | Fraction of stems that died |
+
+**Net vs. Gross growth**:
+
+- **Gross growth** = BA increment of survivors + BA of ingrowth trees
+- **Mortality** = BA of trees that died during the period
+- **Net growth** = Gross growth − Mortality
+
+## Individual Tree History (Panel Data)
+
+`get_individual_tree_history()` reshapes the time series into a panel format
+ideal for longitudinal growth models.
+
+```{r}
+panel <- get_individual_tree_history(ts, min_measurements = 2)
+
+# Each tree appears once per measurement with current + lagged values
+head(panel[, c("tree_cn", "measurement_number", "dbh", "prev_dbh",
+               "annual_dbh_growth", "spp_code")])
+```
+
+This function filters to trees measured at least `min_measurements` times and
+adds competition metrics (BAL, plot BA, relative DBH) via `compute_competition()`.
+
+# Competition Indices {#sec-competition}
+
+Competition indices quantify the competitive environment experienced by
+individual trees. They are essential predictors in diameter increment models,
+mortality models, and crown ratio models.
+
+**References**:
+
+- Wykoff (1990). *A Basal Area Increment Model for Individual Conifers in the
+  Northern Rocky Mountains*. Forest Science 36(4):1077-1104.
+- Monserud & Sterba (1999). *Modeling Individual Tree Mortality for Austrian
+  Forest Species*. Forest Ecology and Management 113:109-123.
+
+## `compute_competition()`
+
+Adds tree-level competition indices to any tree list.
+
+```{r}
+trees <- build_tree_list(fia_ri, variant = "NE")
+comp <- compute_competition(trees)
+
+# New columns added
+setdiff(names(comp), names(trees))
+#> [1] "plot_ba"  "plot_tpa"  "plot_qmd"  "bal"  "relative_dbh"  "percentile_dbh"
+```
+
+**Competition columns**:
+
+| Column | Units | Description |
+|--------|-------|-------------|
+| `bal` | ft²/acre | **Basal area in larger trees** — sum of BA/acre from trees with DBH > this tree's DBH on the same plot. Key predictor of diameter growth. |
+| `plot_ba` | ft²/acre | Total live basal area on the plot |
+| `plot_tpa` | trees/acre | Total trees per acre on the plot |
+| `plot_qmd` | inches | Plot-level quadratic mean diameter |
+| `relative_dbh` | ratio | This tree's DBH ÷ plot QMD. Values > 1 indicate dominant trees. |
+| `percentile_dbh` | 0–1 | Percentile rank of this tree's DBH within the plot |
+
+### BAL (Basal Area in Larger Trees)
+
+BAL is the most widely used individual-tree competition index. For a given tree,
+it is the sum of per-acre basal area contributions from all trees on the same
+plot that have a larger DBH.
+
+$$BAL_i = \sum_{j: DBH_j > DBH_i} BA_j \times TPA_j$$
+
+- Small, suppressed trees have high BAL (lots of larger trees above them)
+- The largest tree on the plot has BAL = 0
+- BAL is typically a strong negative predictor of diameter growth
+
+```{r}
+# BAL distribution
+summary(comp$bal)
+
+# Largest tree on each plot should have BAL = 0
+comp |>
+  dplyr::group_by(plot_id) |>
+  dplyr::filter(dbh == max(dbh)) |>
+  dplyr::pull(bal) |>
+  unique()
+#> [1] 0
+```
+
+### Using Competition in Growth Models
+
+```{r}
+# Prepare model data from time series
+ts <- build_time_series(fia_ri, include_dead = TRUE, variant = "NE")
+panel <- get_individual_tree_history(ts, min_measurements = 2)
+
+# Filter to quality growth records
+model_data <- panel |>
+  dplyr::filter(
+    status == "live",
+    !ingrowth,
+    !is.na(annual_dbh_growth),
+    annual_dbh_growth > 0,
+    annual_dbh_growth < 1.0  # cap at 1 in/yr
+  )
+
+# Fit diameter increment model
+# Common form: ln(DG) = f(ln(DBH), BAL, species, site)
+mod <- lm(
+  log(annual_dbh_growth) ~ log(dbh) + bal + spp_code,
+  data = model_data
+)
+summary(mod)
+```
+
+::: {.callout-tip}
+## Classic Growth Model Form
+The Wykoff (1990) diameter increment model uses:
+$$\ln(DDS) = b_0 + b_1 \cdot DBH + b_2 \cdot DBH^2 + b_3 \cdot BAL + b_4 \cdot SI + b_5 \cdot CR + \epsilon$$
+where DDS = 5-year diameter squared growth, BAL = basal area in larger trees,
+SI = site index, and CR = crown ratio. FIAwrapper's `compute_competition()` and
+`build_time_series()` produce all of these variables.
+:::
+
+### Mortality Modeling
+
+```{r}
+# Binary survival model
+mort_data <- panel |>
+  dplyr::filter(measurement_number > 1, !ingrowth) |>
+  dplyr::mutate(died = as.integer(mortality))
+
+mort_model <- glm(
+  died ~ dbh + bal + plot_ba + spp_code,
+  family = binomial,
+  data = mort_data
+)
+summary(mort_model)
+```
+
+# Quality Control {#sec-quality}
+
+## Outlier Detection {#sec-outliers}
+
+`flag_outliers()` identifies trees with biologically implausible DBH, height,
+or height-to-diameter ratios using species-group-specific bounds.
+
+```{r}
+trees <- build_tree_list(fia_ri, variant = "NE")
+flagged <- flag_outliers(trees)
+
+# How many warnings and flags?
+sum(flagged$warn_dbh | flagged$warn_ht | flagged$warn_hd_ratio, na.rm = TRUE)
+sum(flagged$flag_dbh | flagged$flag_ht | flagged$flag_hd_ratio, na.rm = TRUE)
+
+# View flagged trees
+flagged[!is.na(flagged$outlier_reason),
+        c("spp_code", "dbh", "height", "outlier_reason")]
+```
+
+**Parameters**:
+
+- `data`: Data frame with species, DBH, and height columns
+- `spp_col`: Species code column name (default: `"spp_code"`)
+- `dbh_col`: DBH column name (default: `"dbh"`)
+- `ht_col`: Height column name (default: `"height"`)
+- `method`: `"bounds"` (species-group biological limits) or `"iqr"` (1.5×IQR
+  fences on H:D ratio within species groups)
+- `sensitivity`: Multiplier for bounds (default 1.0; higher = less aggressive)
+
+**Output columns added**:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `warn_dbh` | logical | DBH exceeds 95th percentile for species group |
+| `warn_ht` | logical | Height exceeds 95th percentile |
+| `warn_hd_ratio` | logical | H:D ratio exceeds 95th percentile |
+| `flag_dbh` | logical | DBH outside 99.5th percentile (likely error) |
+| `flag_ht` | logical | Height outside 99.5th percentile |
+| `flag_hd_ratio` | logical | H:D ratio outside 99.5th percentile |
+| `outlier_reason` | character | Human-readable summary of all flags |
+
+**Species groups** used for bounds:
+
+| Group | Species Codes |
+|-------|--------------|
+| spruce_fir | BF, BS, RS, WS, NS, TA, TL |
+| pine | WP, RP, JP, SP, LP |
+| n_hardwood | SM, YB, AB, RO, WA, BA |
+| cedar_hemlock | WC, NC, EH |
+| o_hardwood | RM, QA, PB, GB, GA, BT, BP, SB, BC |
+| other | All others |
+
+Bounds are derived from FIA Phase 2 data (FIADB v9.2, northeastern evaluation
+groups 2015–2023). All thresholds are in imperial units (DBH in inches, height
+in feet).
+
+::: {.callout-note}
+## Flags vs Warnings
+**Warnings** (95th percentile) indicate unusual but possible values — review
+recommended. **Flags** (99.5th percentile) indicate values that are almost
+certainly measurement errors or data entry mistakes. Neither removes data;
+the user decides how to handle them.
+:::
+
+## Variance Estimation {#sec-variance}
+
+`estimate_variance()` computes standard errors and confidence intervals for
+plot-level attributes, supporting both simple random sampling (SRS) and
+post-stratified estimation.
+
+```{r}
+plots <- get_plot_summary(trees)
+
+# Simple random sampling estimate for BA/acre
+est <- estimate_variance(
+  stand = rep(1, nrow(plots)),
+  plot = plots$plot_id,
+  y = plots$ba_per_acre,
+  conf_level = 0.90
+)
+
+est$mean           # Mean BA/acre
+est$se             # Standard error
+est$ci_lower       # 90% CI lower bound
+est$ci_upper       # 90% CI upper bound
+est$precision_pct  # Precision as % of mean (= SE/mean × 100)
+est$n_plots        # Number of plots
+est$method         # "SRS" or "post_stratified"
+```
+
+**Post-stratified estimation** (reduces variance when strata are available):
+
+```{r}
+# Stratify by forest type
+site <- get_site_data(fia_ri)
+plot_data <- merge(plots, site[, c("plot_cn", "forest_type_code")], by = "plot_cn")
+
+est_strat <- estimate_variance(
+  stand = rep(1, nrow(plot_data)),
+  plot = plot_data$plot_id,
+  y = plot_data$ba_per_acre,
+  stratum = plot_data$forest_type_code,
+  stratum_weight = NULL,  # uses proportional weights when NULL
+  conf_level = 0.90
+)
+```
+
+**References**:
+
+- Bechtold & Patterson (2005). *The Enhanced FIA Program*. Gen. Tech. Rep. SRS-80.
+- Scott et al. (2005). *Sample-Based Estimators Used by the Forest Inventory and
+  Analysis National Information Management System*. GTR-SRS-80, Ch. 4.
+
+## Regeneration Assessment {#sec-regen}
+
+`summarize_regen()` computes regeneration metrics from microplot data (saplings
+with DBH < 5.0 inches).
+
+```{r}
+regen <- summarize_regen(
+  stand   = trees$plot_id,
+  plot    = trees$plot_cn,
+  subplot = trees$subplot,
+  dbh     = trees$dbh,
+  species = trees$spp_code
+)
+
+head(regen[, c("stand", "plot", "regen_tpa", "regen_ba_per_acre",
+               "stocking_pct", "n_regen_trees")])
+```
+
+**Output columns**:
+
+| Column | Units | Description |
+|--------|-------|-------------|
+| `regen_tpa` | trees/acre | Regeneration density |
+| `regen_ba_per_acre` | ft²/acre | Regeneration basal area |
+| `stocking_pct` | percent | Stocking relative to reference density |
+| `n_regen_trees` | count | Number of regeneration trees measured |
+| `n_subplots` | count | Number of subplots with data |
+| `commercial_regen_tpa` | trees/acre | TPA of commercial species (if specified) |
+
+The function filters to trees with DBH < 5.0 inches (the microplot threshold)
+and computes per-acre expansion using the 6.8-foot microplot radius.
+
+**Commercial species filtering**:
+
+```{r}
+# Only count commercially valuable species
+regen_comm <- summarize_regen(
+  stand = trees$plot_id,
+  plot = trees$plot_cn,
+  subplot = trees$subplot,
+  dbh = trees$dbh,
+  species = trees$spp_code,
+  commercial_species = c("WP", "RO", "SM", "WO")
+)
+```
