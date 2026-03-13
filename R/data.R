@@ -34,13 +34,13 @@
 #' ## Species Codes (SPCD)
 #' Common species in this dataset:
 #' - 316: red maple
-#' - 541: northern red oak
-#' - 531: white oak
+#' - 541: white ash
+#' - 531: American beech
 #' - 129: eastern white pine
 #' - 261: eastern hemlock
 #' - 318: sugar maple
-#' - 833: red oak
-#' - 802: white ash
+#' - 833: northern red oak
+#' - 802: white oak
 #' - 97: red spruce
 #' - 12: balsam fir
 #'
