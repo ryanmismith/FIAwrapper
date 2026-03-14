@@ -35,8 +35,9 @@ species_pool <- data.frame(
              "American beech", "white ash", "sweetgum",
              "white oak", "northern red oak", "American elm"),
   # Approximate range of DBH (inches) and HT (feet) in RI
-  dbh_mean = c(8, 7, 6, 9, 14, 6, 12, 10, 11, 14, 13, 10, 11, 12, 10),
-  dbh_sd   = c(4, 3, 3, 4, 7, 3, 6, 5, 5, 6, 6, 5, 5, 6, 5),
+  # Calibrated to match published RI state means: BA ~120-125, TPA ~430-450
+  dbh_mean = c(7, 6, 5, 8, 13, 5, 11, 8, 9, 13, 12, 8, 11, 12, 8),
+  dbh_sd   = c(3, 3, 3, 4, 6, 3, 5, 4, 4, 5, 5, 4, 5, 5, 4),
   ht_per_dbh = c(5.5, 4.5, 5.0, 5.8, 5.0, 5.2, 5.5, 5.2, 5.5, 4.8, 5.0, 5.0, 5.2, 5.0, 4.8),
   stringsAsFactors = FALSE
 )
@@ -117,26 +118,26 @@ make_cond <- function(plt_cn, fortypcd, stdage, sicond, siteclcd, slope, aspect,
 # 701 = eastern white pine
 
 cond_list <- list(
-  # 2019 plots
-  make_cond(10001, 505L, 78L, 62, 3L, 15L, 225L, 125.4, 40L),
-  make_cond(10002, 509L, 65L, 55, 3L, 8L,  180L, 98.2, 40L),
-  make_cond(10003, 701L, 85L, 68, 2L, 22L, 270L, 142.8, 40L),
-  make_cond(10004, 505L, 72L, 58, 3L, 12L, 135L, 115.6, 46L),
-  make_cond(10005, 520L, 60L, 52, 3L, 18L, 200L, 88.4, 40L),
-  make_cond(10006, 509L, 55L, 48, 4L, 5L,  90L,  72.6, 40L),
-  make_cond(10007, 505L, 90L, 65, 2L, 25L, 315L, 155.2, 46L),
-  make_cond(10008, 701L, 70L, 60, 3L, 10L, 160L, 108.8, 40L),
-  make_cond(10009, 520L, 50L, 45, 4L, 3L,  0L,   68.2, 40L),
-  make_cond(10010, 509L, 75L, 58, 3L, 14L, 250L, 118.4, 46L),
-  make_cond(10011, 505L, 82L, 62, 3L, 20L, 290L, 135.8, 40L),
-  make_cond(10012, 520L, 58L, 50, 3L, 8L,  170L, 82.4, 40L),
+  # 2019 plots — BALIVE values calibrated to match generated tree BA
+  make_cond(10001, 505L, 78L, 62, 3L, 15L, 225L, 121.7, 40L),
+  make_cond(10002, 509L, 65L, 55, 3L, 8L,  180L, 103.1, 40L),
+  make_cond(10003, 701L, 85L, 68, 2L, 22L, 270L, 168.7, 40L),
+  make_cond(10004, 505L, 72L, 58, 3L, 12L, 135L, 96.0, 46L),
+  make_cond(10005, 520L, 60L, 52, 3L, 18L, 200L, 109.6, 40L),
+  make_cond(10006, 509L, 55L, 48, 4L, 5L,  90L,  158.7, 40L),
+  make_cond(10007, 505L, 90L, 65, 2L, 25L, 315L, 110.3, 46L),
+  make_cond(10008, 701L, 70L, 60, 3L, 10L, 160L, 127.6, 40L),
+  make_cond(10009, 520L, 50L, 45, 4L, 3L,  0L,   136.1, 40L),
+  make_cond(10010, 509L, 75L, 58, 3L, 14L, 250L, 103.6, 46L),
+  make_cond(10011, 505L, 82L, 62, 3L, 20L, 290L, 117.5, 40L),
+  make_cond(10012, 520L, 58L, 50, 3L, 8L,  170L, 97.8, 40L),
   # 2014 plots (same plots, 5 years earlier)
-  make_cond(10101, 505L, 73L, 62, 3L, 15L, 225L, 112.2, 40L),
-  make_cond(10102, 509L, 60L, 55, 3L, 8L,  180L, 86.8, 40L),
-  make_cond(10103, 701L, 80L, 68, 2L, 22L, 270L, 130.4, 40L),
-  make_cond(10104, 505L, 67L, 58, 3L, 12L, 135L, 104.2, 46L),
-  make_cond(10105, 520L, 55L, 52, 3L, 18L, 200L, 78.0, 40L),
-  make_cond(10106, 509L, 50L, 48, 4L, 5L,  90L,  64.4, 40L)
+  make_cond(10101, 505L, 73L, 62, 3L, 15L, 225L, 81.4, 40L),
+  make_cond(10102, 509L, 60L, 55, 3L, 8L,  180L, 130.6, 40L),
+  make_cond(10103, 701L, 80L, 68, 2L, 22L, 270L, 133.9, 40L),
+  make_cond(10104, 505L, 67L, 58, 3L, 12L, 135L, 87.3, 46L),
+  make_cond(10105, 520L, 55L, 52, 3L, 18L, 200L, 136.4, 40L),
+  make_cond(10106, 509L, 50L, 48, 4L, 5L,  90L,  153.9, 40L)
 )
 COND <- do.call(rbind, cond_list)
 
@@ -227,9 +228,10 @@ generate_trees_for_plot <- function(plt_cn, invyr, species_weights, n_trees_per_
 }
 
 # Species composition weights by forest type
-oak_weights   <- c(0.02, 0.02, 0.01, 0.02, 0.08, 0.02, 0.08, 0.25, 0.10, 0.12, 0.15, 0.01, 0.05, 0.05, 0.02)
-pine_weights  <- c(0.05, 0.03, 0.01, 0.03, 0.30, 0.02, 0.10, 0.15, 0.05, 0.05, 0.08, 0.01, 0.05, 0.05, 0.02)
-mixed_weights <- c(0.03, 0.03, 0.01, 0.03, 0.12, 0.03, 0.08, 0.22, 0.08, 0.08, 0.12, 0.02, 0.06, 0.06, 0.03)
+# Red maple (index 8) should be ~27% of stems per published RI data
+oak_weights   <- c(0.02, 0.02, 0.01, 0.02, 0.08, 0.02, 0.08, 0.30, 0.10, 0.10, 0.10, 0.01, 0.05, 0.07, 0.02)
+pine_weights  <- c(0.05, 0.03, 0.01, 0.03, 0.25, 0.02, 0.10, 0.22, 0.05, 0.05, 0.06, 0.01, 0.05, 0.05, 0.02)
+mixed_weights <- c(0.03, 0.03, 0.01, 0.03, 0.12, 0.03, 0.08, 0.28, 0.08, 0.06, 0.08, 0.02, 0.06, 0.07, 0.03)
 
 # Trees per subplot (5-8 per subplot is typical)
 set.seed(42)
