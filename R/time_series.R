@@ -223,10 +223,11 @@ summarize_growth <- function(time_series) {
 
   ts |>
     dplyr::group_by(.data$plot_key, .data$inventory_year) |>
+    dplyr::filter(any(!is.na(.data$years_since_previous))) |>
     dplyr::summarize(
-      period_start = min(.data$inventory_year - .data$years_since_previous, na.rm = TRUE),
+      period_years = stats::median(.data$years_since_previous, na.rm = TRUE),
       period_end   = dplyr::first(.data$inventory_year),
-      period_years = dplyr::first(.data$years_since_previous),
+      period_start = .data$period_end[1] - .data$period_years[1],
 
       # Survivors (alive at both measurements)
       n_survivors = sum(.data$status == "live" & !.data$ingrowth, na.rm = TRUE),
