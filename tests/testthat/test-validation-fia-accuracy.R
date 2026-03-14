@@ -35,16 +35,14 @@ test_that("TPA for subplot trees matches FIA design geometry exactly", {
   subplot_area_ac <- subplot_area_ft2 / 43560
   expected_tpa <- 1 / (subplot_area_ac * 4)
 
-  # compute_tpa should match
-  tpa <- compute_tpa(dbh = c(10, 15, 20), subplot = c(1, 2, 3))
-  # Only 3 unique subplots, so TPA = 1 / (area * 3)
-  expected_3sub <- 1 / (subplot_area_ac * 3)
-  expect_equal(tpa[1], expected_3sub, tolerance = 0.001)
+  # compute_tpa with default n_subplots=4 (FIA standard)
+  tpa <- compute_tpa(dbh = c(10, 15, 20, 8), subplot = c(1, 2, 3, 4))
+  expect_equal(tpa[1], expected_tpa, tolerance = 0.001)
+  expect_equal(round(tpa[1], 3), 6.018)
 
-  # Standard 4-subplot design
-  tpa4 <- compute_tpa(dbh = c(10, 15, 20, 8), subplot = c(1, 2, 3, 4))
-  expect_equal(tpa4[1], expected_tpa, tolerance = 0.001)
-  expect_equal(round(tpa4[1], 3), 6.018)
+  # Even with trees on only 3 subplots, n_subplots=4 by default
+  tpa3 <- compute_tpa(dbh = c(10, 15, 20), subplot = c(1, 2, 3))
+  expect_equal(tpa3[1], expected_tpa, tolerance = 0.001)
 })
 
 test_that("TPA for microplot trees matches FIA design geometry exactly", {
@@ -62,20 +60,20 @@ test_that("TPA for microplot trees matches FIA design geometry exactly", {
 })
 
 test_that("DBH threshold of 5.0 inches separates subplot from microplot", {
-  # Trees exactly at 5.0 inches go to subplot
+  # Trees exactly at 5.0 inches go to subplot; default n_subplots=4
   tpa <- compute_tpa(dbh = c(5.0, 4.9), subplot = c(1, 1))
-  subplot_tpa <- 1 / (pi * 24^2 / 43560 * 1)
-  microplot_tpa <- 1 / (pi * 6.8^2 / 43560 * 1)
+  subplot_tpa <- 1 / (pi * 24^2 / 43560 * 4)
+  microplot_tpa <- 1 / (pi * 6.8^2 / 43560 * 4)
   expect_equal(tpa[1], subplot_tpa, tolerance = 0.001)   # >= 5.0 -> subplot
   expect_equal(tpa[2], microplot_tpa, tolerance = 0.001)  # < 5.0 -> microplot
 })
 
-test_that("Condition proportion adjustment divides TPA correctly", {
-  # CONDPROP_UNADJ = 0.5 means half the subplot is in this condition
-  # TPA should double (trees represent more area)
+test_that("Condition proportion adjustment multiplies TPA correctly", {
+  # CONDPROP_UNADJ = 0.5 means half the plot area is in this condition
+  # TPA should halve: TPA_EXP = TPA_UNADJ * CONDPROP_UNADJ (EVALIDator methodology)
   tpa_full <- compute_tpa(dbh = 10, subplot = 1, cond_prop = 1.0)
   tpa_half <- compute_tpa(dbh = 10, subplot = 1, cond_prop = 0.5)
-  expect_equal(tpa_half, tpa_full * 2, tolerance = 0.001)
+  expect_equal(tpa_half, tpa_full * 0.5, tolerance = 0.001)
 })
 
 # ============================================================================

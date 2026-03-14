@@ -3,15 +3,17 @@
 #' Calculates per-tree expansion factors (trees per acre) based on the FIA
 #' national nested plot design. Trees >= 5.0 inches DBH are measured on
 #' subplots (24.0 ft radius); smaller trees on microplots (6.8 ft radius).
-#' The number of subplots is auto-detected from unique subplot values.
 #'
 #' @param dbh Numeric vector of diameters at breast height in **inches**.
 #' @param subplot Integer or character vector identifying the subplot each tree
 #'   was measured on (1-4 for standard FIA design).
 #' @param cond_prop Optional numeric vector of unadjusted condition proportions
-#'   (0-1). When provided, each tree's TPA is divided by its condition
-#'   proportion to account for partial conditions on subplot boundaries
-#'   (Bechtold & Patterson 2005, Eq. 4.1).
+#'   (CONDPROP_UNADJ, range 0-1). When provided, each tree's TPA is multiplied
+#'   by its condition proportion, matching EVALIDator methodology where
+#'   TPA_EXP = TPA_UNADJ * CONDPROP_UNADJ (Bechtold & Patterson 2005).
+#' @param n_subplots Integer. Number of subplots in the plot design. Default
+#'   4L for the standard FIA national plot design. FIA TPA_UNADJ always uses
+#'   the full design (4 subplots) regardless of which subplots have trees.
 #' @param subplot_radius_ft Numeric. Subplot radius in feet. Default 24.0
 #'   (7.32 m) per FIA national design.
 #' @param microplot_radius_ft Numeric. Microplot radius in feet. Default 6.8
@@ -59,6 +61,7 @@
 #' @export
 compute_tpa <- function(dbh, subplot,
                         cond_prop = NULL,
+                        n_subplots = 4L,
                         subplot_radius_ft = 24.0,
                         microplot_radius_ft = 6.8,
                         dbh_threshold = 5.0) {
@@ -82,7 +85,7 @@ compute_tpa <- function(dbh, subplot,
   subplot_area_ac   <- (pi * subplot_radius_ft^2) / 43560
   microplot_area_ac <- (pi * microplot_radius_ft^2) / 43560
 
-  n_subplots <- length(unique(subplot))
+  n_subplots <- as.integer(n_subplots)
 
   # Assign TPA based on DBH threshold
   is_subplot <- dbh >= dbh_threshold
@@ -95,7 +98,7 @@ compute_tpa <- function(dbh, subplot,
   # Condition proportion adjustment
   if (!is.null(cond_prop)) {
     valid_cond <- !is.na(cond_prop) & cond_prop > 0
-    tpa <- ifelse(valid_cond, tpa / cond_prop, tpa)
+    tpa <- ifelse(valid_cond, tpa * cond_prop, tpa)
   }
 
   tpa
