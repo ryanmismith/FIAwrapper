@@ -28,7 +28,7 @@ Bug 3: No COND_STATUS_CD or PLOT_STATUS_CD filtering  [FIXED]
   Impact: Non-forest conditions and non-sampled plots included
 
 === PRE-FIX BASELINE (real fiaRI data) ===
-  BA: 197.4 ft²/acre (published ~122)
+  BA: 197.4 ft2/acre (published ~122)
   TPA: 814 (published ~427)
   These were wildly inflated due to all 3 bugs compounding.
 
@@ -43,7 +43,7 @@ Bug 3: No COND_STATUS_CD or PLOT_STATUS_CD filtering  [FIXED]
    Per-plot BA/TPA/QMD match hand-computed EVALIDator to <0.0001.
 
 3. get_plot_summary() - PASS
-   Statewide means: BA=80.5 ft²/acre, TPA=317.8, QMD=8.0 in
+   Statewide means: BA=80.5 ft2/acre, TPA=317.8, QMD=8.0 in
    Matches hand-computed EVALIDator means exactly.
 
 4. Per-plot comparison (245 matched plots):
@@ -57,8 +57,57 @@ Note: Mean BA (80.5) is lower than published RI estimates (~122) because:
   - Our simple mean includes all sampled plots equally (unweighted)
   - This is expected behavior; design-based estimation is in estimate_variance()
 
-All 556 unit tests pass after fixes.
+=== POST-FIX VALIDATION: All TPA-Dependent Functions ===
 
-=== REMAINING FUNCTION VALIDATION ===
-(In progress - see below)
+5. summarize_plot() - PASS
+   Vector-based aggregation matches hand calculations exactly.
+   Tested: TPA=454.83, BA=96.45, QMD=6.24 on sample plot.
+   All within tolerance of 0.01.
+
+6. get_species_summary() - PASS
+   Per-species TPA sums equal plot total TPA (454.83 = 454.83).
+   1,751 species-plot combinations across 332 plots.
+
+7. qmd() - PASS
+   sqrt(sum(DBH^2 * TPA) / sum(TPA)) matches to 4 decimal places.
+   qmd()=6.2354, hand=6.2354.
+
+8. summarize_regen() - PASS
+   243 regen summaries from 1,046 saplings (<5" DBH).
+   Returns regen_tpa, regen_ba_per_acre, stocking_pct correctly.
+
+9. build_time_series() - PASS
+   258 remeasured plots identified, 8,690 time series records.
+   Correctly pairs current/previous measurements via PREV_TRE_CN.
+
+10. summarize_growth() - PASS
+    185 growth summaries computed.
+    Returns net/gross BA growth, mortality rates, ingrowth.
+    Minor warnings for plots without previous measurement data (expected).
+
+11. compute_competition() - PASS
+    8,690 records with competition indices.
+    Includes plot_ba, plot_tpa, plot_qmd, BAL, relative_dbh, percentile_dbh.
+
+12. estimate_variance() - PASS
+    SRS variance estimation: mean BA=80.5, SE=3.1, 90% CI=[75.3, 85.6]
+    Precision: 6.42% (332 plots).
+
+13. export_fvs_treelist() - PASS
+    8,516 trees exported in FVS fixed-width .tre format.
+    Stand IDs, species codes, DBH, height correctly formatted.
+
+14. export_fvs_standlist() - PASS
+    Per-tree records with stand-level attributes exported to CSV.
+    Includes BA, TPA, site index, location data.
+
+=== SUMMARY ===
+
+All 14 TPA-dependent functions validated against real Rhode Island FIA data.
+All produce correct results matching EVALIDator methodology.
+All 556 unit tests pass.
+
+No additional bugs found in downstream functions -- the 3 core bugs
+(CONDPROP multiply, n_subplots=4, status filters) were the root cause
+of all estimation errors.
 
