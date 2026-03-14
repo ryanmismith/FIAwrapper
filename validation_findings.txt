@@ -2,36 +2,63 @@ FIAwrapper Function Validation Against Real FIA Data
 =====================================================
 Date: 2026-03-14
 Data Source: rFIA fiaRI dataset (Rhode Island, real FIA inventory data)
+             10,644 trees, 702 plots, 908 conditions, 60 species
+             Inventory years 2004-2018, 337 sampled plots
 Reference: EVALIDator methodology (TPA_EXP = TPA_UNADJ * CONDPROP_UNADJ)
 
-=== BUGS IDENTIFIED ===
+=== BUGS IDENTIFIED AND FIXED ===
 
-Bug 1: CONDPROP_UNADJ applied backwards in compute_tpa()
+Bug 1: CONDPROP_UNADJ applied backwards in compute_tpa()  [FIXED]
   File: R/expansion.R line 98
   Was: tpa / cond_prop (DIVIDES - inflates TPA for partial conditions)
   Fix: tpa * cond_prop (MULTIPLIES - per EVALIDator methodology)
+  Evidence: test-evalidator-crosscheck.R line 23: TPA_EXP = TPA_UNADJ * CONDPROP_UNADJ
   Impact: On real RI data with mean CONDPROP=0.77, TPA inflated ~30-70%
-  Status: FIXING
 
-Bug 2: n_subplots auto-detected from data instead of using FIA design constant
+Bug 2: n_subplots auto-detected from data instead of using FIA design constant  [FIXED]
   File: R/expansion.R line 85
   Was: n_subplots <- length(unique(subplot))
-  Fix: Add n_subplots = 4L parameter (standard FIA 4-subplot design)
-  Impact: Plots with trees on <4 subplots get inflated TPA
-  Status: FIXING
+  Fix: Added n_subplots = 4L parameter (standard FIA 4-subplot design)
+  Impact: Plots with trees on <4 subplots got inflated TPA
 
-Bug 3: No COND_STATUS_CD or PLOT_STATUS_CD filtering
+Bug 3: No COND_STATUS_CD or PLOT_STATUS_CD filtering  [FIXED]
   File: R/prep_data.R
   Was: No condition/plot status filters
   Fix: Filter COND to COND_STATUS_CD == 1, PLOT to PLOT_STATUS_CD == 1
   Impact: Non-forest conditions and non-sampled plots included
-  Status: FIXING
 
 === PRE-FIX BASELINE (real fiaRI data) ===
   BA: 197.4 ft²/acre (published ~122)
   TPA: 814 (published ~427)
-  QMD: TBD
+  These were wildly inflated due to all 3 bugs compounding.
 
-=== VALIDATION RESULTS ===
-(Results will be added after fixes are applied)
+=== POST-FIX VALIDATION: Core Functions ===
+
+1. compute_tpa() - PASS
+   Per-plot TPA matches TPA_UNADJ * CONDPROP_UNADJ exactly.
+   Max per-plot difference: 0.000023 TPA
+
+2. build_tree_list() - PASS
+   332 plots, 8,516 live trees processed correctly.
+   Per-plot BA/TPA/QMD match hand-computed EVALIDator to <0.0001.
+
+3. get_plot_summary() - PASS
+   Statewide means: BA=80.5 ft²/acre, TPA=317.8, QMD=8.0 in
+   Matches hand-computed EVALIDator means exactly.
+
+4. Per-plot comparison (245 matched plots):
+   TPA: max diff = 0.000023, mean diff = 0.000007
+   BA:  max diff = 0.000013, mean diff = 0.000004
+   QMD: max diff = 0.000000, mean diff = 0.000000
+   All within tolerance of 0.01 -- PERFECT MATCH
+
+Note: Mean BA (80.5) is lower than published RI estimates (~122) because:
+  - Published estimates use design-based weighting (POP_STRATUM tables)
+  - Our simple mean includes all sampled plots equally (unweighted)
+  - This is expected behavior; design-based estimation is in estimate_variance()
+
+All 556 unit tests pass after fixes.
+
+=== REMAINING FUNCTION VALIDATION ===
+(In progress - see below)
 

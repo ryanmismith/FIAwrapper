@@ -158,6 +158,13 @@ prep_fia_data <- function(fia_trees,
     if (!"CN" %in% names(fia_plots)) {
       stop("fia_plots must contain 'CN' column.", call. = FALSE)
     }
+
+    # Filter to sampled forest plots (PLOT_STATUS_CD == 1)
+    if ("PLOT_STATUS_CD" %in% names(fia_plots)) {
+      fia_plots <- fia_plots[!is.na(fia_plots$PLOT_STATUS_CD) &
+                               fia_plots$PLOT_STATUS_CD == 1, ]
+    }
+
     plot_sub <- data.frame(CN = fia_plots$CN, stringsAsFactors = FALSE)
 
     # Standard plot columns
@@ -196,6 +203,13 @@ prep_fia_data <- function(fia_trees,
     if (!"PLT_CN" %in% names(fia_cond)) {
       stop("fia_cond must contain 'PLT_CN' column.", call. = FALSE)
     }
+
+    # Filter to forest conditions (COND_STATUS_CD == 1)
+    if ("COND_STATUS_CD" %in% names(fia_cond)) {
+      fia_cond <- fia_cond[!is.na(fia_cond$COND_STATUS_CD) &
+                             fia_cond$COND_STATUS_CD == 1, ]
+    }
+
     cond_sub <- data.frame(PLT_CN = fia_cond$PLT_CN, stringsAsFactors = FALSE)
 
     cond_map <- c(

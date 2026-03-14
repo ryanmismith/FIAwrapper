@@ -40,34 +40,40 @@ test_that("mixed DBH trees get correct subplot/microplot assignment", {
   expect_equal(tpa, c(tpa_sub, tpa_mic, tpa_sub, tpa_mic))
 })
 
-test_that("condition proportion adjustment divides TPA by cond_prop", {
+test_that("condition proportion adjustment multiplies TPA by cond_prop", {
   dbh       <- c(10, 8)
-  subp      <- c(1, 2)
-  cond_prop <- c(0.5, 0.75)
+  subp      <- c(1, 2, 3, 4)
+  cond_prop <- c(0.5, 0.75, 1.0, 1.0)
 
-  tpa <- compute_tpa(dbh, subp, cond_prop = cond_prop)
+  tpa <- compute_tpa(c(10, 8, 12, 9), subp, cond_prop = cond_prop)
 
   subplot_area_ac <- pi * 24.0^2 / 43560
-  base_tpa        <- 1 / (subplot_area_ac * 2)  # 2 unique subplots
+  base_tpa        <- 1 / (subplot_area_ac * 4)  # 4 subplots (FIA standard)
 
-  expect_equal(tpa[1], base_tpa / 0.5)
-  expect_equal(tpa[2], base_tpa / 0.75)
+  # EVALIDator: TPA_EXP = TPA_UNADJ * CONDPROP_UNADJ
+  expect_equal(tpa[1], base_tpa * 0.5)
+  expect_equal(tpa[2], base_tpa * 0.75)
+  expect_equal(tpa[3], base_tpa * 1.0)
+  expect_equal(tpa[4], base_tpa * 1.0)
 })
 
-test_that("auto-detects number of subplots from unique subplot values", {
+test_that("n_subplots parameter controls expansion factor", {
   dbh  <- c(10, 12)
   subp <- c(1, 2)
 
-  tpa <- compute_tpa(dbh, subp)
-
+  # Default is 4 subplots (FIA standard)
+  tpa4 <- compute_tpa(dbh, subp)
   subplot_area_ac <- pi * 24.0^2 / 43560
-  expected_tpa    <- 1 / (subplot_area_ac * 2)
+  expected_tpa_4  <- 1 / (subplot_area_ac * 4)
+  expect_equal(tpa4, rep(expected_tpa_4, 2))
 
-  expect_equal(tpa, rep(expected_tpa, 2))
+  # Explicit 2-subplot design
+  tpa2 <- compute_tpa(dbh, subp, n_subplots = 2)
+  expected_tpa_2 <- 1 / (subplot_area_ac * 2)
+  expect_equal(tpa2, rep(expected_tpa_2, 2))
 
-  # With 4 subplots the TPA should differ
-  tpa4 <- compute_tpa(c(10, 12, 8, 9), c(1, 2, 3, 4))
-  expect_true(tpa4[1] < tpa[1])
+  # 2 subplots gives higher TPA than 4
+  expect_true(tpa2[1] > tpa4[1])
 })
 
 test_that("mismatched lengths produce an error", {
