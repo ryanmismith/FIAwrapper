@@ -1298,9 +1298,22 @@ the user decides how to handle them.
 
 ## Variance Estimation {#sec-variance}
 
-`estimate_variance()` computes standard errors and confidence intervals for
-plot-level attributes, supporting both simple random sampling (SRS) and
-post-stratified estimation.
+FIAwrapper provides two approaches for estimating population means and
+uncertainty. Choose based on whether you have POP tables from FIA DataMart.
+
+### `estimate_variance()` -- Plot-level sampling statistics
+
+Computes standard errors and confidence intervals from plot-level summaries.
+Use this when you have a tree list and want basic statistics (mean, SE,
+confidence interval) for any per-acre attribute. Supports simple random
+sampling (SRS) and post-stratified estimation.
+
+**When to use**: Quick summaries from your tree list, comparison of areas you
+defined (e.g., by ownership, forest type), or when POP tables are unavailable.
+
+**What it tells you**: The sampling precision of the simple arithmetic mean
+across your plots. The mean itself is *unweighted* -- all plots contribute
+equally regardless of how much area they represent in the landscape.
 
 ```{r}
 plots <- get_plot_summary(trees)
@@ -1313,13 +1326,13 @@ est <- estimate_variance(
   conf_level = 0.90
 )
 
-est$mean           # Mean BA/acre
-est$se             # Standard error
+est$mean           # Unweighted mean BA/acre across plots
+est$se             # Standard error of the mean
 est$ci_lower       # 90% CI lower bound
 est$ci_upper       # 90% CI upper bound
-est$precision_pct  # Precision as % of mean (= SE/mean × 100)
+est$precision_pct  # Precision as % of mean (= CI half-width / mean * 100)
 est$n_plots        # Number of plots
-est$method         # "SRS" or "post_stratified"
+est$method         # "SRS" or "post-stratified"
 ```
 
 **Post-stratified estimation** (reduces variance when strata are available):
@@ -1338,6 +1351,63 @@ est_strat <- estimate_variance(
   conf_level = 0.90
 )
 ```
+
+::: {.callout-important}
+`estimate_variance()` computes an *unweighted* mean. For statewide or
+regional estimates that match FIA publications and EVALIDator, use
+`estimate_population()` instead, which applies the FIA stratified sampling
+design weights.
+:::
+
+### `estimate_population()` -- Design-based estimation with POP tables
+
+Computes design-based per-acre estimates using the FIA stratified sampling
+framework and POP tables (POP_STRATUM, POP_PLOT_STRATUM_ASSGN, POP_EVAL,
+POP_EVAL_TYP). This produces estimates comparable to **EVALIDator** and
+published **FIA state fact sheets**.
+
+**When to use**: Generating official-quality statewide or regional estimates,
+comparing your results to published FIA statistics, or any time you need
+estimates that account for the FIA stratified sampling design.
+
+**How it differs from `estimate_variance()`**:
+
+| | `estimate_variance()` | `estimate_population()` |
+|---|---|---|
+| **Input** | Plot summaries (any tree list) | Full FIA data with POP tables |
+| **Weighting** | Equal (SRS) or user-supplied strata | FIA design weights (EXPNS, ADJ_FACTOR) |
+| **Estimator** | Sample mean or stratified mean | Ratio-of-means (total attribute / total area) |
+| **Matches EVALIDator** | No | Yes |
+| **Typical BA result (RI)** | ~80 ft²/acre | ~109 ft²/acre |
+
+```{r eval=FALSE}
+# Requires POP tables from FIA DataMart download
+fia <- fetch_fia_data("RI")
+
+# Basal area per acre of forest land
+ba_est <- estimate_population(fia, attribute = "ba")
+ba_est$estimate          # Design-based BA per acre
+ba_est$se                # Standard error
+ba_est$ci_lower          # Confidence interval
+ba_est$ci_upper
+ba_est$n_plots           # Total plots in evaluation
+ba_est$n_forest_plots    # Plots with forest conditions
+ba_est$total_forest_acres # Estimated total forest area
+ba_est$eval_descr        # "RHODE ISLAND 2018: 2012-2018: ..."
+
+# Trees per acre
+tpa_est <- estimate_population(fia, attribute = "tpa")
+
+# Volume, biomass, carbon
+vol_est <- estimate_population(fia, attribute = "volcfnet")
+bio_est <- estimate_population(fia, attribute = "drybio")
+carb_est <- estimate_population(fia, attribute = "carbon")
+```
+
+The function automatically selects the most recent evaluation of the requested
+type (default: `EXPCURR` for current area/volume). Available attributes:
+`"ba"`, `"tpa"`, `"volcfnet"`, `"volcfgrs"`, `"volbfnet"`, `"drybio"`,
+`"carbon"`.
 
 **References**:
 
@@ -2094,12 +2164,13 @@ Common forest type codes found in the COND table `FORTYPCD` field. Full list:
 | `get_species_table(variant)` | Full mapping table |
 | `pef_to_fvs(pef_code)` | PEF code → FVS alpha |
 
-### Quality Control
+### Quality Control & Estimation
 
 | Function | Purpose |
 |----------|---------|
 | `flag_outliers(data, method, sensitivity)` | Detect outlier trees |
-| `estimate_variance(stand, plot, y, stratum)` | SE and confidence intervals |
+| `estimate_variance(stand, plot, y, stratum)` | SE and CIs from plot summaries (SRS/post-stratified) |
+| `estimate_population(fia_data, attribute)` | Design-based estimates using POP tables (matches EVALIDator) |
 | `summarize_regen(stand, plot, subplot, dbh)` | Regeneration metrics |
 
 ### Utilities
