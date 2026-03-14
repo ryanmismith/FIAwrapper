@@ -1,0 +1,37 @@
+FIAwrapper Function Validation Against Real FIA Data
+=====================================================
+Date: 2026-03-14
+Data Source: rFIA fiaRI dataset (Rhode Island, real FIA inventory data)
+Reference: EVALIDator methodology (TPA_EXP = TPA_UNADJ * CONDPROP_UNADJ)
+
+=== BUGS IDENTIFIED ===
+
+Bug 1: CONDPROP_UNADJ applied backwards in compute_tpa()
+  File: R/expansion.R line 98
+  Was: tpa / cond_prop (DIVIDES - inflates TPA for partial conditions)
+  Fix: tpa * cond_prop (MULTIPLIES - per EVALIDator methodology)
+  Impact: On real RI data with mean CONDPROP=0.77, TPA inflated ~30-70%
+  Status: FIXING
+
+Bug 2: n_subplots auto-detected from data instead of using FIA design constant
+  File: R/expansion.R line 85
+  Was: n_subplots <- length(unique(subplot))
+  Fix: Add n_subplots = 4L parameter (standard FIA 4-subplot design)
+  Impact: Plots with trees on <4 subplots get inflated TPA
+  Status: FIXING
+
+Bug 3: No COND_STATUS_CD or PLOT_STATUS_CD filtering
+  File: R/prep_data.R
+  Was: No condition/plot status filters
+  Fix: Filter COND to COND_STATUS_CD == 1, PLOT to PLOT_STATUS_CD == 1
+  Impact: Non-forest conditions and non-sampled plots included
+  Status: FIXING
+
+=== PRE-FIX BASELINE (real fiaRI data) ===
+  BA: 197.4 ft²/acre (published ~122)
+  TPA: 814 (published ~427)
+  QMD: TBD
+
+=== VALIDATION RESULTS ===
+(Results will be added after fixes are applied)
+
