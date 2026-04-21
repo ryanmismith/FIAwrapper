@@ -1,6 +1,6 @@
 Package: FIAwrapper
 Title: Clean Forest Inventory Tree Lists from FIA Data
-Version: 0.1.0
+Version: 1.1.0
 Authors@R: person("Ryan", "Smith", role = c("aut", "cre"),
     email = "ryanmismith@github.com")
 Description: Wrapper functions that transform USDA Forest Inventory and

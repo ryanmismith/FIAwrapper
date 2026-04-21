@@ -2,11 +2,30 @@
 % Please edit documentation in R/time_series.R
 \name{.link_tree_measurements}
 \alias{.link_tree_measurements}
-\title{Link trees across measurement cycles}
+\title{Link trees across measurement cycles (vectorized)}
 \usage{
 .link_tree_measurements(tl)
+
+.link_tree_measurements(tl)
+}
+\arguments{
+\item{tl}{Tree list from \code{\link[=prep_fia_data]{prep_fia_data()}} with \code{measurement_number} column
+already assigned.}
+}
+\value{
+The input with additional columns: \code{prev_dbh}, \code{prev_height},
+\code{prev_status}, \code{prev_inventory_year}, \code{dbh_growth}, \code{height_growth},
+\code{annual_dbh_growth}, \code{annual_height_growth}, \code{years_since_previous},
+\code{ingrowth}, \code{mortality}.
 }
 \description{
-Link trees across measurement cycles
+Primary linking strategy: self-join via \code{prev_tree_cn} -> \code{tree_cn} to pull
+each tree's previous DBH, height, status, and inventory year in a single
+dplyr operation. Fallback: same self-join logic keyed by
+\code{plot_key + subplot + tree_num + (measurement_number - 1)}.
+}
+\details{
+Growth deltas and annualized rates are computed with vectorized arithmetic
+on the resulting columns. All operations are O(n) over the tree list.
 }
 \keyword{internal}

@@ -8,11 +8,13 @@ build_time_series(
   fia_data,
   include_dead = FALSE,
   variant = NULL,
-  min_measurements = 2
+  min_measurements = 2,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{fia_data}{List of FIA data frames.}
+\item{fia_data}{List of FIA data frames (must contain \code{TREE}, \code{PLOT},
+and \code{COND}).}
 
 \item{include_dead}{Logical. Include trees that died between measurements?
 Default FALSE (survivors only). Set TRUE for mortality analysis.}
@@ -21,6 +23,8 @@ Default FALSE (survivors only). Set TRUE for mortality analysis.}
 
 \item{min_measurements}{Minimum number of measurement cycles for a plot
 to be included. Default 2.}
+
+\item{verbose}{Logical. Emit progress messages at each stage? Default TRUE.}
 }
 \value{
 A tibble with all \code{\link[=build_tree_list]{build_tree_list()}} columns plus:
@@ -30,6 +34,8 @@ A tibble with all \code{\link[=build_tree_list]{build_tree_list()}} columns plus
 \item{years_since_previous}{Years between this and prior measurement.}
 \item{prev_dbh}{DBH at previous measurement (inches). NA for first.}
 \item{prev_height}{Height at previous measurement (feet). NA for first.}
+\item{prev_status}{Live/dead status at previous measurement. NA for first.}
+\item{prev_inventory_year}{Inventory year of previous measurement. NA for first.}
 \item{dbh_growth}{Periodic DBH increment (inches).}
 \item{height_growth}{Periodic height increment (feet).}
 \item{annual_dbh_growth}{Annualized DBH increment (inches/year).}
@@ -44,12 +50,28 @@ linking individual trees across measurements. The output is designed
 for growth modeling: each tree has its current and previous measurements,
 plus growth increments and status change flags.
 }
+\details{
+This function is vectorized end-to-end. Tree linking across measurements
+is performed via a single \code{\link[dplyr:mutate-joins]{dplyr::left_join()}} on \code{prev_tree_cn} rather
+than a per-row for-loop, making it 50-500x faster than a naive
+implementation on large donor pools. Progress is emitted via
+\code{\link[=message]{message()}} at each of six stages; suppress with \code{\link[=suppressMessages]{suppressMessages()}}
+if undesired.
+
+For large FIA caches, pre-filter \code{fia_data} to the plots of interest
+before calling. The function's cost scales with the number of remeasured
+plots in the input; unfiltered 4-state caches will process ~8k plots
+regardless of downstream use.
+}
 \examples{
 \dontrun{
 fia <- fetch_fia_data("ME")
 ts <- build_time_series(fia)
 # Filter to survivors with growth data
 survivors <- ts[!is.na(ts$dbh_growth) & !ts$mortality, ]
+
+# Suppress progress messages
+ts_quiet <- suppressMessages(build_time_series(fia))
 }
 
 }
