@@ -4,8 +4,9 @@
 
 FIAwrapper transforms raw USDA Forest Inventory and Analysis (FIA) database
 exports into clean, imperial-unit tree lists using the terminology foresters
-actually use on the ground. No more deciphering `CONDPROP_UNADJ`, `TPA_UNADJ`,
-`SPCD`, or `STATUSCD` — just `dbh`, `height`, `tpa`, `species`, and `status`.
+actually use on the ground. This package removes the need to navigate database
+variables like `CONDPROP_UNADJ`, `TPA_UNADJ`, `SPCD`, or `STATUSCD` and translates
+FIA data into familiary terminology like `dbh`, `height`, `tpa`, `species`, and `status`.
 
 ```r
 # install.packages("devtools")
